@@ -86,7 +86,9 @@ public final class PeerChannel: @unchecked Sendable {
     }
     public func close(){connection.cancel()}
     public func send(_ message:[String:Any])async throws {
-        let body=try JSONSerialization.data(withJSONObject:message)
+        // Base64 can contain mostly slashes. Escaping them can inflate a valid
+        // 1 MiB binary block beyond the 2 MiB wire-frame limit.
+        let body=try JSONSerialization.data(withJSONObject:message,options:.withoutEscapingSlashes)
         guard body.count<=2*1024*1024 else{throw VaultError.message("Sync message exceeds frame limit")}
         var count=UInt32(body.count).bigEndian
         var frame=withUnsafeBytes(of:&count){Data($0)};frame.append(body)

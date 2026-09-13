@@ -187,7 +187,7 @@ final class DeviceSync: @unchecked Sendable {
     private func status()->[String:Any]{["paired":config != nil,"phase":phase,"peers":endpoints.keys.sorted().map{["id":$0,"name":"Paired device · "+$0.prefix(6),"syncing":busy.contains($0)]},"lastSync":lastSync,"error":problem,"device":device,"transport":"TLS 1.2 · ECDHE + ChaCha20-Poly1305"]}
     private func publish(){
         let value=status();emit(value)
-        let diagnostic:[String:Any] = ["updated":Date().timeIntervalSince1970,"paired":config != nil,"peers":endpoints.count,"activeTransfers":busy.count,"connections":channels.map{String(describing:$0.connection.state)},"stage":connectionStage,"lastSync":lastSync,"error":problem,"phase":busy.isEmpty ? "Idle":"Connecting or syncing"]
+        let diagnostic:[String:Any] = ["updated":Date().timeIntervalSince1970,"paired":config != nil,"peers":endpoints.count,"activeTransfers":busy.count,"connections":channels.map{String(describing:$0.connection.state)},"stage":connectionStage,"lastSync":lastSync,"error":problem,"phase":phase.contains("%") ? (phase.hasPrefix("Sending") ? "Sending document":"Receiving document")+" · "+(phase.components(separatedBy:" · ").last ?? ""):phase]
         let directory=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Vault/Diagnostics")
         try? FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
         if let data=try? JSONSerialization.data(withJSONObject:diagnostic,options:.sortedKeys){try? data.write(to:directory.appendingPathComponent("sync.json"),options:.atomic)}

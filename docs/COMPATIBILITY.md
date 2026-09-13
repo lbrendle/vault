@@ -1,10 +1,10 @@
 # Compatibility and limits
 
-Vault is an independent application using ordinary files. This beta does not claim exact Obsidian parity.
+Vault is an independent application using ordinary files. This beta does not claim complete support for every vault workflow.
 
 | Area | Available | Current limits |
 | --- | --- | --- |
-| Markdown | Source editing, reading and split modes; wiki links, backlinks, tags, callouts, footnotes, math, Mermaid | No Obsidian Live Preview/WYSIWYG parity; plugin syntax can differ |
+| Markdown | Source editing, reading and split modes; wiki links, backlinks, tags, callouts, footnotes, math, Mermaid | No other Markdown applications Live Preview/WYSIWYG parity; plugin syntax can differ |
 | Organization | Folders, tabs, bookmarks, daily notes, templates, frontmatter | No arbitrary workspace split parity or community plugins |
 | Canvas / Bases | Common file formats and a useful subset of views/editing | Not every Canvas gesture, formula, filter, or Base layout |
 | Documents | Continuous local PDF reader, attachments, supported platform previews | No complete PDF/Office full-text extraction or OCR index |

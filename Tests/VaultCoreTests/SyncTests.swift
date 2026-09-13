@@ -105,7 +105,9 @@ final class SyncTests:XCTestCase {
   return(listener,port)
  }
  func testEncryptedTransferResumesLargeFileAndSyncsBothWays()async throws {
-  let data=Data((0..<(1024*1024+17)).map{UInt8($0%251)})
+  // All-FF bytes become base64 slashes; the default JSON escaping used to
+  // overflow the frame limit even though the binary block was within bounds.
+  let data=Data(repeating:255,count:2*1024*1024+17)
   try data.write(to:a.store.root.appendingPathComponent("Paper.pdf"));try write(a,"Mac.md","from mac");try write(a,"Empty.md","");try write(b,"iPad.md","from iPad")
   a.invalidate();try a.scan();b.invalidate();try b.scan();let e=try XCTUnwrap(a.entry("Paper.pdf"));try data.prefix(262144).write(to:b.staging(e))
   try a.store.saveState(["chats":[["id":"chat-a","title":"Research","updated":1,"messages":[["role":"user","content":String(repeating:"A research excerpt. ",count:40000)]]]],"bookmarks":["Mac.md"]])

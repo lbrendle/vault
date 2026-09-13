@@ -1,12 +1,26 @@
 <p align="center"><img src="assets/Vault-Icon.png" width="112" alt="Vault icon"></p>
 <h1 align="center">Vault</h1>
-<p align="center"><strong>A quiet place for your research. An open home for your ideas.</strong></p>
+<p align="center"><strong>Open quickly. Think freely. Keep it yours.</strong></p>
 <p align="center">Local documents · Local AI · Direct device sync<br>Mac · iPhone · iPad</p>
 <p align="center"><a href="https://github.com/lbrendle/vault/releases">Download</a> · <a href="docs/GETTING_STARTED.md">Get started</a> · <a href="docs/BUILDING.md">Build it yourself</a> · <a href="docs/COMPATIBILITY.md">What works today</a></p>
 
 Vault is a private document workspace built around ordinary folders. Open your existing Markdown vault, read PDFs, follow connections, and talk with a model running on your own hardware. Keep the folder on your drive. Take a backup with you. Your research does not need a hosted workspace.
 
-**Public beta: `0.5.0-beta.1`.** The app is usable today; it is not a complete replacement for every Obsidian feature. Read the [compatibility notes](docs/COMPATIBILITY.md) before moving a critical workflow.
+**Public beta: `0.5.0-beta.1`.** Read the [document and device support notes](docs/COMPATIBILITY.md) before moving a critical workflow.
+
+[![Watch Vault on Mac, iPad, and iPhone](docs/media/vault-demo-poster.jpg)](https://github.com/lbrendle/vault/releases/download/v0.5.0-beta.1/vault-demo-1080p.mp4)
+
+<p align="center">A short tour of the real app. Fictional library; mobile footage recorded in iOS Simulator.</p>
+
+## Less waiting. More room to think.
+
+**Get into your documents quickly.** Long notes open progressively, and the PDF reader renders nearby pages as you scroll. Keep reading without building the entire document on screen first.
+
+**Sync what changed.** Direct device connections send changed files, batch small documents, and resume interrupted transfers. Once a file arrives, it is available offline. Initial setup for a large library takes longer than later updates.
+
+**Keep your library focused.** Search and indexing work locally. Development folders stay out of the document library, while your files remain in the folder you chose.
+
+**Bring your own intelligence.** Two Qwen starters, folder-based model imports, and native on-device inference let you choose a companion for your hardware. Your documents and conversations do not need a hosted AI service.
 
 ## A workspace that stays out of the way
 
@@ -60,4 +74,4 @@ Choose `ArchiiVaultMac` for Mac or `ArchiiVault` for iPhone/iPad. Use **Xcode 26
 
 Issues, focused pull requests, and reproducible synthetic examples are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), the [roadmap](docs/ROADMAP.md), and the [security policy](SECURITY.md). Please do not attach your private research vault, conversations, pairing codes, or device provisioning profiles to public issues.
 
-Licensed under **Apache-2.0**. Dependencies and model weights retain their own licenses; see [third-party notices](docs/THIRD_PARTY.md). Vault is an independent project, not affiliated with Obsidian, OpenAI, Qwen, or Apple.
+Licensed under **Apache-2.0**. Dependencies and model weights retain their own licenses; see [third-party notices](docs/THIRD_PARTY.md). Vault is an independent project, not affiliated with OpenAI, Qwen, or Apple.

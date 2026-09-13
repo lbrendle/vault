@@ -25,7 +25,7 @@ button { font-weight:450; }
 .section-tabs button.selected { color:var(--text); }
 .folder-trail { display:flex; align-items:center; height:34px; gap:3px; margin:3px 0; color:var(--muted); }
 .folder-trail button { height:30px; min-width:28px; border-radius:6px; padding:4px 7px; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.file-list { flex:1 1 0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-bottom:8px; scrollbar-width:thin; }
+.sidebar > .file-list { flex:1 1 0; min-height:0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; padding-bottom:8px; scrollbar-width:thin; scroll-padding-block:8px; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
 .file-row { display:flex; align-items:center; gap:10px; width:100%; min-height:35px; padding:8px 10px; border-radius:8px; text-align:left; color:var(--muted); font-size:12px; }
 .file-row svg { width:16px; height:16px; color:var(--muted); }
 .file-row > span { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -272,3 +272,15 @@ button { font-weight:450; }
 [data-platform=ios] .workspace { padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
 
 [data-recoloring=true] *, [data-recoloring=true] *::before, [data-recoloring=true] *::after { transition:none!important; }
+
+/* Navigation labels are controls; a drag should pan their list, never select text. */
+:is(.sidebar,.conversation-list) :is(button,.brand,.folder-trail) { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.file-row > * { pointer-events:none; -webkit-user-select:none; user-select:none; }
+.file-row { touch-action:pan-y; }
+
+[data-device=phone] .touch-scroll, [data-device=phone] .touch-scroll * { touch-action:none; }
+
+/* Touch hover can linger on the row underneath a moving finger. Keep only
+   the actual open document highlighted on phones. */
+[data-device=phone] .file-row { -webkit-tap-highlight-color:transparent; }
+[data-device=phone] .file-row:not(.active):hover { background:transparent; }

@@ -45,7 +45,7 @@ Vault's own source is Apache-2.0. Each dependency retains its own license. This 
 
 Qwen starter weights are distributed under their upstream Apache-2.0 licenses. Model revisions, checksums, licenses, and conversion attribution are in `models/`. A checkpoint's presence does not imply endorsement by its publisher.
 
-The Vault icon was created for this project with generative image assistance; theme variants and the leaf wordmark are project artwork. No Obsidian or ChatGPT assets are included. System fonts are requested from the operating system rather than copied from it. Interface glyphs use Lucide (ISC); KaTeX and PDF.js distribute their own licensed fonts.
+The Vault icon was created for this project with generative image assistance; theme variants and the leaf wordmark are project artwork. No third-party product artwork is included. System fonts are requested from the operating system rather than copied from it. Interface glyphs use Lucide (ISC); KaTeX and PDF.js distribute their own licensed fonts.
 
 | Component | Resolved version | License text |
 | --- | --- | --- |

@@ -42,8 +42,9 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
     func connect(_ root:URL) throws {
         let hash=VaultStore.fingerprint(Data(Self.vaultIdentity(root).utf8))
         let cache=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Archii Vault/Cache/"+hash)
-        sync?.stop()
-        store=try VaultStore(root:root,cache:cache)
+        let nextStore=try VaultStore(root:root,cache:cache)
+        localModel?.stop();sync?.stop()
+        store=nextStore
         UserDefaults.standard.set(root.path,forKey:"vaultPath")
         #if os(iOS)
         let documents=FileManager.default.urls(for:.documentDirectory,in:.userDomainMask)[0]
@@ -53,7 +54,7 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         }else{UserDefaults.standard.removeObject(forKey:"localVaultRelativePath")}
         #endif
         if let store {
-            sync=DeviceSync(store:store,emit:{[weak self] data in self?.event("sync",data)},changed:{[weak self] paths in self?.event("files",["paths":paths]);if paths.isEmpty{self?.event("sharedState",[:])}});sync?.start()
+            sync=DeviceSync(store:store,emit:{[weak self,weak store] data in guard let self,let store,self.store===store else{return};self.event("sync",data)},changed:{[weak self,weak store] paths in guard let self,let store,self.store===store else{return};self.event("files",["paths":paths]);if paths.isEmpty{self.event("sharedState",[:])}});sync?.start()
             indexQueue.async { _ = try? store.scan() }
             #if os(macOS)
             let vaultSync=sync
@@ -86,7 +87,7 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
             #if os(macOS)
             replyHandler(["name":"mac"],nil)
             #else
-            replyHandler(["name":"ios"],nil)
+            replyHandler(["name":"ios","device":UIDevice.current.userInterfaceIdiom == .phone ? "phone":"pad"],nil)
             #endif
             return
         }

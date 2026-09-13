@@ -100,8 +100,9 @@ struct VaultWebView:UIViewRepresentable {
   config.userContentController.addUserScript(WKUserScript(source:"window.addEventListener('error',e=>window.webkit.messageHandlers.vault.postMessage({method:'logError',args:{message:e.message}}));",injectionTime:.atDocumentStart,forMainFrameOnly:true))
   config.userContentController.addUserScript(WKUserScript(source:"window.__nativeKeyboardLayout=true;",injectionTime:.atDocumentStart,forMainFrameOnly:true))
   let web=WKWebView(frame:.zero,configuration:config)
-  // The web shell fills the window; only its document/list panes scroll.
-  web.scrollView.isScrollEnabled=false;web.scrollView.bounces=false
+  // Keep WebKit pan recognition enabled for nested overflow panes. The fixed
+  // CSS shell owns root overflow and UIKit owns keyboard avoidance.
+  web.scrollView.isScrollEnabled=true;web.scrollView.bounces=false
   web.scrollView.alwaysBounceVertical=false;web.scrollView.alwaysBounceHorizontal=false
   web.scrollView.contentInsetAdjustmentBehavior = .never
   web.scrollView.automaticallyAdjustsScrollIndicatorInsets=false

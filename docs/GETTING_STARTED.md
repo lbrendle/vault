@@ -2,7 +2,7 @@
 
 ## Open a folder
 
-On Mac, choose **Open a vault** and select an ordinary folder. You can use the same folder in Obsidian and Vault. New files and saved changes become visible to Vault's watcher. Do not edit the same document simultaneously in two editors without checking for newer changes.
+On Mac, choose **Open a vault** and select an ordinary folder. You can use the same folder in Vault and another Markdown editor. New files and saved changes become visible to Vault's watcher. Do not edit the same document simultaneously in two editors without checking for newer changes.
 
 On iPhone/iPad, **Create a local vault** is the easiest way to get a complete offline copy. Pair it with your desktop vault in Settings. Opening a folder supplied by a third-party Files provider can inherit that provider's availability and cloud behavior; a local vault avoids that dependency.
 

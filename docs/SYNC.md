@@ -1,6 +1,6 @@
 # How sync works
 
-Vault opens an ordinary folder. On Mac, a filesystem watcher notices eligible changes made by Vault, Obsidian, Finder, or another editor. Periodic scans reconcile changes on mobile and changes missed while the app was closed. The index supports navigation/search; the files remain the source of truth.
+Vault opens an ordinary folder. On Mac, a filesystem watcher notices eligible changes made by Vault, Finder, or another editor. Periodic scans reconcile changes on mobile and changes missed while the app was closed. The index supports navigation/search; the files remain the source of truth.
 
 Paired devices discover each other with Bonjour on the same local network, authenticate using the pairing secret, and exchange changes over an encrypted direct connection. There is no vendor-operated cloud drive, relay, or account. A pairing code grants vault access and must be kept private.
 
