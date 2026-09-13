@@ -8,9 +8,38 @@ import {parse, stringify} from 'yaml';
 export const md=new MarkdownIt({html:true,linkify:true,breaks:true,typographer:false}).use(footnote).use(taskLists).use(mark).use(texmath,{engine:katex,delimiters:'dollars',katexOptions:{trust:false,throwOnError:false}});
 md.inline.ruler.before('link','wiki',(state,silent)=>{
  const rest=state.src.slice(state.pos),m=/^(!?)\[\[([^\]\n]+)\]\]/.exec(rest);if(!m)return false;
- if(!silent){const token=state.push('html_inline','',0);const [target,...alias]=m[2].replace(/\\\|/g,'|').split('|');const label=alias.join('|')||target;token.content=`<${m[1]?'span':'a'} class="${m[1]?'embed':'wikilink'}" data-wiki="${md.utils.escapeHtml(target)}" ${m[1]?'data-embed="true"':'href="#"'}>${md.utils.escapeHtml(label)}</${m[1]?'span':'a'}>`;}
+ if(!silent){const token=state.push('html_inline','',0);const [target,...alias]=m[2].replace(/\\\|/g,'|').split('|');const label=alias.join('|')||(state.env.chat?target.split('/').pop().replace(/\.md(?=#|$)/i,''):target);token.content=`<${m[1]?'span':'a'} class="${m[1]?'embed':'wikilink'}" data-wiki="${md.utils.escapeHtml(target)}" title="${md.utils.escapeHtml(target)}" ${m[1]?'data-embed="true"':'href="#"'}>${md.utils.escapeHtml(label)}</${m[1]?'span':'a'}>`;}
  state.pos+=m[0].length;return true;
 });
+// Models sometimes omit Markdown's angle brackets around document paths with
+// spaces. Recover only local document references, leaving normal Markdown alone.
+md.inline.ruler.before('link','chat_document_link',(state,silent)=>{
+ if(!state.env.chat||state.src[state.pos]!=='['||state.linkLevel>0)return false;
+ const labelEnd=md.helpers.parseLinkLabel(state,state.pos,false);
+ if(labelEnd<0||state.src[labelEnd+1]!=='(')return false;
+ let end=labelEnd+2,depth=1;
+ for(;end<state.posMax;end++){
+  const char=state.src[end];if(char==='\n')return false;
+  if(char==='\\'){end++;continue}if(char==='(')depth++;if(char===')'&&--depth===0)break;
+ }
+ if(depth!==0)return false;
+ const target=state.src.slice(labelEnd+2,end).trim();
+ if(!/\s/.test(target)||/[<>"\x00-\x1f]/.test(target)||/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)||! /\.(?:md|markdown|pdf|txt|canvas|base)(?:#[^\n]*)?$/i.test(target))return false;
+ if(!silent){
+  const token=state.push('html_inline','',0),label=state.src.slice(state.pos+1,labelEnd);
+  token.content=`<a class="wikilink" data-wiki="${md.utils.escapeHtml(target)}" href="#">${md.utils.escapeHtml(label)}</a>`;
+ }
+ state.pos=end+1;return true;
+});
+const inlineCode=md.renderer.rules.code_inline;
+md.renderer.rules.code_inline=(tokens,i,options,env,self)=>{
+ const text=tokens[i].content;
+ if(env.chat&&(/^\[\[[^\]\n]+\]\]$/.test(text)||/^\[[^\]\n]+\]\([^\n]+\)$/.test(text))){
+  const rendered=md.renderInline(text,env);
+  if(/^<a\b/.test(rendered)&&rendered.endsWith('</a>'))return rendered;
+ }
+ return inlineCode(tokens,i,options,env,self);
+};
 const fence=md.renderer.rules.fence.bind(md.renderer.rules);
 md.renderer.rules.fence=(tokens,i,options,env,self)=> tokens[i].info.trim()==='mermaid'?`<pre class="mermaid">${md.utils.escapeHtml(tokens[i].content)}</pre>`:fence(tokens,i,options,env,self);
 export function frontmatter(content=''){
@@ -20,10 +49,10 @@ export function frontmatter(content=''){
 }
 export function updateProperties(content,properties){const parsed=frontmatter(content);if(parsed.error)throw new Error('Fix the YAML syntax in source mode before editing properties.');return '---\n'+stringify(properties).trimEnd()+'\n---\n\n'+parsed.body.replace(/^\n+/,'');}
 
-export function parseMarkdown(content){const {body}=frontmatter(content),env={},tokens=md.parse(body,env);let task=0;for(const token of tokens)for(const child of token.children||[])if(child.type==='html_inline'&&child.content.includes('task-list-item-checkbox'))child.content=child.content.replace('<input ',`<input data-task-source="${task++}" `);return {tokens,env}}
-export function markdownHTML(content){const {tokens,env}=parseMarkdown(content);return md.renderer.render(tokens,md.options,env)}
-export function markdownSections(content,budget=16000){
- const {tokens,env}=parseMarkdown(content),sections=[];let start=0,depth=0,characters=0,lines=0,headings=[];
+export function parseMarkdown(content,options={}){const {body}=frontmatter(content),env={chat:options.chat===true},tokens=md.parse(body,env);let task=0;for(const token of tokens)for(const child of token.children||[])if(child.type==='html_inline'&&child.content.includes('task-list-item-checkbox'))child.content=child.content.replace('<input ',`<input data-task-source="${task++}" `);return {tokens,env}}
+export function markdownHTML(content,options){const {tokens,env}=parseMarkdown(content,options);return md.renderer.render(tokens,md.options,env)}
+export function markdownSections(content,budget=16000,options){
+ const {tokens,env}=parseMarkdown(content,options),sections=[];let start=0,depth=0,characters=0,lines=0,headings=[];
  for(let i=0;i<tokens.length;i++){const token=tokens[i];
   if(depth===0&&['fence','code_block'].includes(token.type)&&token.info.trim()!=='mermaid'&&token.content.length>budget*2){
    if(i>start)sections.push({start,end:i,characters,lines,headings});

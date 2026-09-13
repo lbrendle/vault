@@ -13,5 +13,5 @@ export function markdownFragment(html){
  return fragment;
 }
 
-export const renderFragment=content=>markdownFragment(markdownHTML(content));
+export const renderFragment=(content,options)=>markdownFragment(markdownHTML(content,options));
 export function render(content){const box=document.createElement('div');box.append(renderFragment(content));return box.innerHTML}

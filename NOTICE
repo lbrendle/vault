@@ -1,9 +1,9 @@
-Archii Vault
-Copyright 2026 Archii Vault contributors
+Vault
+Copyright 2026 Vault contributors
 Created by Lauren Brendle.
 
 This project includes software developed by third parties. Their notices and
 license texts are preserved in docs/licenses and docs/THIRD_PARTY.md.
 Qwen model weights retain their own Apache-2.0 licenses and attribution in models/.
-The Archii Vault name and visual identity do not imply endorsement by any model
+The Vault name and visual identity do not imply endorsement by any model
 publisher, dependency author, or other product.

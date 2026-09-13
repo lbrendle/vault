@@ -1,10 +1,10 @@
-<p align="center"><img src="assets/Vault-Icon.png" width="112" alt="Archii Vault icon"></p>
-<h1 align="center">Archii Vault</h1>
+<p align="center"><img src="assets/Vault-Icon.png" width="112" alt="Vault icon"></p>
+<h1 align="center">Vault</h1>
 <p align="center"><strong>A quiet place for your research. An open home for your ideas.</strong></p>
 <p align="center">Local documents · Local AI · Direct device sync<br>Mac · iPhone · iPad</p>
-<p align="center"><a href="https://github.com/lbrendle/archii-vault/releases">Download</a> · <a href="docs/GETTING_STARTED.md">Get started</a> · <a href="docs/BUILDING.md">Build it yourself</a> · <a href="docs/COMPATIBILITY.md">What works today</a></p>
+<p align="center"><a href="https://github.com/lbrendle/vault/releases">Download</a> · <a href="docs/GETTING_STARTED.md">Get started</a> · <a href="docs/BUILDING.md">Build it yourself</a> · <a href="docs/COMPATIBILITY.md">What works today</a></p>
 
-Archii Vault is a private document workspace built around ordinary folders. Open your existing Markdown vault, read PDFs, follow connections, and talk with a model running on your own hardware. Keep the folder on your drive. Take a backup with you. Your research does not need a hosted workspace.
+Vault is a private document workspace built around ordinary folders. Open your existing Markdown vault, read PDFs, follow connections, and talk with a model running on your own hardware. Keep the folder on your drive. Take a backup with you. Your research does not need a hosted workspace.
 
 **Public beta: `0.5.0-beta.1`.** The app is usable today; it is not a complete replacement for every Obsidian feature. Read the [compatibility notes](docs/COMPATIBILITY.md) before moving a critical workflow.
 
@@ -41,13 +41,13 @@ Device sync uses an authenticated, encrypted direct connection on your local net
 
 ## Install or build
 
-Get the latest [release](https://github.com/lbrendle/archii-vault/releases). Mac downloads target **Apple silicon, macOS 14+**. Release notes describe signing/notarization status; this beta is not distributed through the App Store.
+Get the latest [release](https://github.com/lbrendle/vault/releases). Mac downloads target **Apple silicon, macOS 14+**. Release notes describe signing/notarization status; this beta is not distributed through the App Store.
 
 For iPhone/iPad, build with Xcode and your own signing team. The deployment target is iOS/iPadOS 17; actual model compatibility depends on hardware and available memory. There is no generally installable iOS IPA or TestFlight invitation in this release.
 
 ```sh
-git clone https://github.com/lbrendle/archii-vault.git
-cd archii-vault
+git clone https://github.com/lbrendle/vault.git
+cd vault
 npm ci --prefix web
 npm run build --prefix web
 xcodegen generate --spec native/project.yml
@@ -60,4 +60,4 @@ Choose `ArchiiVaultMac` for Mac or `ArchiiVault` for iPhone/iPad. Use **Xcode 26
 
 Issues, focused pull requests, and reproducible synthetic examples are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), the [roadmap](docs/ROADMAP.md), and the [security policy](SECURITY.md). Please do not attach your private research vault, conversations, pairing codes, or device provisioning profiles to public issues.
 
-Licensed under **Apache-2.0**. Dependencies and model weights retain their own licenses; see [third-party notices](docs/THIRD_PARTY.md). Archii Vault is an independent project, not affiliated with Obsidian, OpenAI, Qwen, or Apple.
+Licensed under **Apache-2.0**. Dependencies and model weights retain their own licenses; see [third-party notices](docs/THIRD_PARTY.md). Vault is an independent project, not affiliated with Obsidian, OpenAI, Qwen, or Apple.

@@ -1,6 +1,6 @@
 # Your local model library
 
-Archii Vault includes a native MLX runtime on Mac, iPhone, and iPad. Installed models run directly on that device without an account, hosted API, separate Python environment, or internet connection.
+Vault includes a native MLX runtime on Mac, iPhone, and iPad. Installed models run directly on that device without an account, hosted API, separate Python environment, or internet connection.
 
 ## Install a starter in the app
 
@@ -23,7 +23,7 @@ Get a **complete compatible MLX model folder**. Keep `config.json`, `tokenizer.j
 
 - **Mac:** Settings → Models & chat → Import model folder; choose it in Finder. Vault copies it into its own library.
 - **iPhone/iPad:** Transfer the folder with an external drive, Finder File Sharing, or AirDrop (zip the folder, then unzip in Files). Choose Import model folder and select the folder in Files. Vault copies it onto that device.
-- **Direct copy:** Open the Models folder from Settings, place complete model subfolders inside it, then Refresh. On mobile this is **On My iPhone/iPad → Archii Vault → Models**.
+- **Direct copy:** Open the Models folder from Settings, place complete model subfolders inside it, then Refresh. On mobile this is **On My iPhone/iPad → Vault → Models**.
 
 The copy is independent of the source folder, so disconnecting the drive afterward does not remove the installed model. Duplicate imports do not overwrite an installed model. Incomplete/unsupported models show a useful error. A `.disabled` marker inside a model folder hides it without deleting weights.
 
@@ -48,7 +48,7 @@ For a developer build, download into the repository's ignored `models/` director
 
 ```sh
 python3 scripts/download-model.py all
-VAULT_MODELS_DIR="$PWD/models" 'dist/Archii Vault.app/Contents/MacOS/Archii Vault'
+VAULT_MODELS_DIR="$PWD/models" 'dist/Vault.app/Contents/MacOS/Vault'
 ```
 
 For an iOS build, choose your own Xcode signing team, install the app, then use the in-app downloader or Files import. No model paths, device identifiers, or signing teams need to be edited into source. The same model folder can be installed independently on multiple devices you own.

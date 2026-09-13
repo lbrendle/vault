@@ -17,12 +17,14 @@ final class DeviceSync: @unchecked Sendable {
     private let changed:([String])->Void
     private var modelChannel:PeerChannel?
     private var listener:NWListener?,browser:NWBrowser?,timer:DispatchSourceTimer?
-    private var channels=[PeerChannel](),endpoints=[String:NWEndpoint](),busy=Set<String>()
+    private var channels=[PeerChannel](),endpoints=[String:[NWEndpoint]](),busy=Set<String>()
     private var config:[String:String]?,phase="Not paired",lastSync:Double=0,problem=""
     private let device:String,keyAccount:String
     private var transfer:PeerTransfer?
     private var lastProgress:Double=0,metadataBusy=Set<String>()
     private var forceNextSync=false
+    private var generation=UUID(),foregroundObserver:NSObjectProtocol?
+    private var connectionStage="Idle"
     init(store:VaultStore,emit:@escaping([String:Any])->Void,changed:@escaping([String])->Void) {
         self.store=store;self.emit=emit;self.changed=changed
         let key="syncDeviceID";if let id=UserDefaults.standard.string(forKey:key){device=id}else{device=UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased();UserDefaults.standard.set(device,forKey:key)}
@@ -34,11 +36,16 @@ final class DeviceSync: @unchecked Sendable {
             let parts=code.components(separatedBy:".");if parts.count==3,let secret=Data(base64Encoded:parts[2]),secret.count==32 {config=["group":parts[1],"secret":parts[2]]}
         }
         #endif
-
+        #if os(iOS)
+        foregroundObserver=NotificationCenter.default.addObserver(forName:UIApplication.willEnterForegroundNotification,object:nil,queue:nil){[weak self] _ in self?.start()}
+        #else
+        foregroundObserver=NotificationCenter.default.addObserver(forName:NSWorkspace.didWakeNotification,object:nil,queue:nil){[weak self] _ in self?.start()}
+        #endif
     }
+    deinit {if let foregroundObserver{NotificationCenter.default.removeObserver(foregroundObserver)}}
     func start(){queue.async{[weak self] in self?.startOnQueue()}}
     func stop(){queue.async{[weak self] in self?.stopOnQueue()}}
-    private func stopOnQueue(){listener?.cancel();browser?.cancel();timer?.cancel();listener=nil;browser=nil;timer=nil;channels.forEach{$0.close()};modelChannel?.close();modelChannel=nil;channels=[];endpoints=[:];busy=[]}
+    private func stopOnQueue(){generation=UUID();metadataBusy=[];listener?.cancel();browser?.cancel();timer?.cancel();listener=nil;browser=nil;timer=nil;channels.forEach{$0.close()};modelChannel?.close();modelChannel=nil;channels=[];endpoints=[:];busy=[]}
     private func startOnQueue(){
         stopOnQueue();guard let config,let encoded=config["secret"],let secret=Data(base64Encoded:encoded),secret.count==32,let group=config["group"] else{publish();return}
         do {
@@ -56,13 +63,20 @@ final class DeviceSync: @unchecked Sendable {
             let discovery=NWParameters.tcp;discovery.includePeerToPeer=true
             let browser=NWBrowser(for:.bonjour(type:"_archiivault._tcp",domain:"local."),using:discovery)
             browser.browseResultsChangedHandler={[weak self] results,_ in
-                guard let self else{return};var found=[String:NWEndpoint]()
-                for result in results {if case let .service(name,_,_,_)=result.endpoint,let id=PeerIdentity.device(in:name,group:group,excluding:self.device) {found[id]=result.endpoint}}
+                guard let self else{return};var found=[String:[NWEndpoint]]()
+                for result in results {if case let .service(name,_,_,_)=result.endpoint,let id=PeerIdentity.device(in:name,group:group,excluding:self.device) {
+                    var routes=[NWEndpoint]()
+                    if case let .service(name,type,domain,_)=result.endpoint {
+                        // Prefer infrastructure Wi-Fi; include the system-selected route.
+                        let interfaces=result.interfaces.sorted{a,b in (a.name=="en0" ? 0:1)<(b.name=="en0" ? 0:1)}
+                        for interface in interfaces.prefix(3){routes.append(.service(name:name,type:type,domain:domain,interface:interface))}
+                    }
+                    routes.append(result.endpoint);found[id]=routes}}
                 self.endpoints=found;self.publish();self.synchronizeAll()
             }
             browser.stateUpdateHandler={[weak self] state in switch state {case .failed(let error),.waiting(let error):self?.problem="Local network: "+error.localizedDescription;self?.publish();default:break}}
             self.browser=browser;browser.start(queue:queue)
-            let timer=DispatchSource.makeTimerSource(queue:queue);timer.schedule(deadline:.now()+3,repeating:15);timer.setEventHandler{[weak self] in self?.synchronizeAll()};timer.resume();self.timer=timer
+            let timer=DispatchSource.makeTimerSource(queue:queue);timer.schedule(deadline:.now()+3,repeating:15);timer.setEventHandler{[weak self] in self?.synchronizeAll();self?.publish()};timer.resume();self.timer=timer
             phase="Waiting for paired devices";problem="";publish()
         }catch{problem=error.localizedDescription;publish()}
     }
@@ -99,8 +113,9 @@ final class DeviceSync: @unchecked Sendable {
             var channel:PeerChannel?,replied=false,remoteModels:Any=[]
             do {
                 for endpoint in endpoints {
-                    let c=PeerChannel(NWConnection(to:endpoint,using:PeerTLS.parameters(secret:secret)))
-                    do {try await c.ready();let hello=try await c.request("hello");if hello["model"] as? Bool==true {channel=c;remoteModels=hello["models"] ?? [];break}}catch{};c.close()
+                    var candidate:PeerChannel?
+                    do {let c=try await PeerChannel.connect(to:endpoint,secret:secret);candidate=c;let hello=try await c.request("hello");if hello["model"] as? Bool==true {channel=c;remoteModels=hello["models"] ?? [];break}}catch{}
+                    candidate?.close()
                 }
                 guard let c=channel else{throw VaultError.message("No paired Mac is available for inference")}
                 if method=="modelStatus" {c.close();DispatchQueue.main.async{reply(["installed":true,"remote":true,"models":remoteModels],nil)};return}
@@ -117,23 +132,36 @@ final class DeviceSync: @unchecked Sendable {
     func documentsChanged(_ paths:[String]){queue.async{[weak self] in guard let self,let transfer=self.transfer else{return};self.changesQueue.async{do{try transfer.catalog.refresh(paths);self.queue.async{self.synchronizeAll()}}catch{self.queue.async{self.problem=error.localizedDescription;self.publish()}}}}}
     private func synchronizeAll(){
         guard let encoded=config?["secret"],let secret=Data(base64Encoded:encoded),let transfer else{return}
-        for (id,endpoint) in endpoints where device<id && busy.contains(id) && !metadataBusy.contains(id) {
+        let run=generation
+        for (id,routes) in endpoints where device<id && busy.contains(id) && !metadataBusy.contains(id) {
             metadataBusy.insert(id)
-            Task {let c=PeerChannel(NWConnection(to:endpoint,using:PeerTLS.parameters(secret:secret)));defer{c.close();self.queue.async{self.metadataBusy.remove(id)}};do{try await c.ready();try await transfer.synchronizeState(c)}catch{}}
+            Task {
+                defer{self.queue.async{if self.generation==run{self.metadataBusy.remove(id)}}}
+                do {let c=try await PeerChannel.connect(to:routes,secret:secret);defer{c.close()};try await transfer.synchronizeState(c)}catch{}
+            }
         }
         let force=forceNextSync
-        for (id,endpoint) in endpoints where device<id && !busy.contains(id) {
-            forceNextSync=false
-            busy.insert(id);let channel=PeerChannel(NWConnection(to:endpoint,using:PeerTLS.parameters(secret:secret)));channels.append(channel)
-            Task {do {try await channel.ready();try await transfer.synchronize(channel,forceScan:force);self.queue.async{self.lastSync=Date().timeIntervalSince1970;self.problem=""}}catch {self.queue.async{self.problem=error.localizedDescription;self.phase="Will retry when connected"}}
-                channel.close();self.queue.async{self.busy.remove(id);self.channels.removeAll{$0===channel};self.publish()}
+        for (id,routes) in endpoints where device<id && !busy.contains(id) {
+            forceNextSync=false;busy.insert(id);connectionStage="Connecting";publish()
+            Task {
+                do {
+                    let channel=try await PeerChannel.connect(to:routes,secret:secret)
+                    defer{channel.close();self.queue.async{self.channels.removeAll{$0===channel}}}
+                    let current=await withCheckedContinuation{continuation in self.queue.async{
+                        if self.generation==run {self.channels.append(channel);self.connectionStage="Connected securely";self.problem="";self.publish();continuation.resume(returning:true)}else{continuation.resume(returning:false)}
+                    }}
+                    guard current else{return}
+                    try await transfer.synchronize(channel,forceScan:force)
+                    self.queue.async{if self.generation==run{self.lastSync=Date().timeIntervalSince1970;self.problem=""}}
+                }catch {self.queue.async{if self.generation==run{self.problem=error.localizedDescription;self.phase="Will retry when connected"}}}
+                self.queue.async{if self.generation==run{self.busy.remove(id);self.publish()}}
             }
         }
     }
     private func requestPeerSync(){
         guard let encoded=config?["secret"],let secret=Data(base64Encoded:encoded)else{return}
-        for (id,endpoint) in endpoints where device>id {
-            Task {let c=PeerChannel(NWConnection(to:endpoint,using:PeerTLS.parameters(secret:secret)));defer{c.close()};do{try await c.ready();_ = try await c.request("requestSync")}catch{self.queue.async{self.problem=error.localizedDescription;self.publish()}}}
+        for (id,routes) in endpoints where device>id {
+            Task {do{let c=try await PeerChannel.connect(to:routes,secret:secret);defer{c.close()};_ = try await c.request("requestSync")}catch{self.queue.async{self.problem=error.localizedDescription;self.publish()}}}
         }
     }
     func call(_ method:String,args:[String:Any],reply:@escaping(Any?,String?)->Void){queue.async{
@@ -149,7 +177,7 @@ final class DeviceSync: @unchecked Sendable {
                 self.config=["group":parts[1],"secret":parts[2]];try self.saveConfig();self.startOnQueue();result=self.status()
             case "syncCode":result=["code":self.pairingCode()]
             case "syncDisconnect":self.stopOnQueue();self.config=nil;Self.deleteKey(self.keyAccount);self.phase="Not paired";self.problem="";self.lastSync=0;result=self.status();self.publish()
-            case "syncNow":self.forceNextSync=true;self.phase=self.busy.isEmpty ? "Connecting to paired devices":"Sync in progress";self.synchronizeAll();self.requestPeerSync();result=self.status();self.publish()
+            case "syncNow":if self.busy.isEmpty && (!self.problem.isEmpty || self.endpoints.isEmpty){self.startOnQueue()};self.forceNextSync=true;self.phase=self.busy.isEmpty ? "Connecting to paired devices":"Sync in progress";self.synchronizeAll();self.requestPeerSync();result=self.status();self.publish()
             default:result=self.status()
             }
             DispatchQueue.main.async{reply(result,nil)}
@@ -157,7 +185,13 @@ final class DeviceSync: @unchecked Sendable {
     }}
     private func pairingCode()->String {guard let c=config else{return ""};return "AV1."+(c["group"] ?? "")+"."+(c["secret"] ?? "")}
     private func status()->[String:Any]{["paired":config != nil,"phase":phase,"peers":endpoints.keys.sorted().map{["id":$0,"name":"Paired device · "+$0.prefix(6),"syncing":busy.contains($0)]},"lastSync":lastSync,"error":problem,"device":device,"transport":"TLS 1.2 · ECDHE + ChaCha20-Poly1305"]}
-    private func publish(){emit(status())}
+    private func publish(){
+        let value=status();emit(value)
+        let diagnostic:[String:Any] = ["updated":Date().timeIntervalSince1970,"paired":config != nil,"peers":endpoints.count,"activeTransfers":busy.count,"connections":channels.map{String(describing:$0.connection.state)},"stage":connectionStage,"lastSync":lastSync,"error":problem,"phase":busy.isEmpty ? "Idle":"Connecting or syncing"]
+        let directory=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Vault/Diagnostics")
+        try? FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        if let data=try? JSONSerialization.data(withJSONObject:diagnostic,options:.sortedKeys){try? data.write(to:directory.appendingPathComponent("sync.json"),options:.atomic)}
+    }
     private static func keyQuery(_ account:String)->[String:Any]{[kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:(Bundle.main.bundleIdentifier ?? "com.archii.vault")+".device-sync",kSecAttrAccount as String:account]}
     private static func loadKey(_ account:String)->Data? {var q=keyQuery(account);q[kSecReturnData as String]=true;var out:CFTypeRef?;guard SecItemCopyMatching(q as CFDictionary,&out)==errSecSuccess else{return nil};return out as? Data}
     private static func deleteKey(_ account:String){SecItemDelete(keyQuery(account) as CFDictionary)}

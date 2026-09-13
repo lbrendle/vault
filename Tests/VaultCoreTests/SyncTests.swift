@@ -2,6 +2,42 @@ import XCTest
 import Network
 @testable import VaultCore
 final class SyncTests:XCTestCase {
+ func testCachedScanPreservesChangesAndRejectsAReplacedSymlinkAncestor()throws {
+  for i in 0..<2000 {try write(a,"Library/Notes/Item \(i).md","Original \(i)")}
+  try a.scan();let before=try a.journalHead(),began=Date()
+  a.invalidate();try a.scan()
+  print("Cached sync scan: 2000 documents in \(Date().timeIntervalSince(began)) seconds")
+  XCTAssertEqual(try a.journalHead().sequence,before.sequence)
+  try write(a,"Library/Notes/Item 9.md","A changed document")
+  try FileManager.default.removeItem(at:a.store.safeURL("Library/Notes/Item 10.md"))
+  a.invalidate();try a.scan()
+  let changed=try a.journalChanges(after:before.sequence,through:a.journalHead().sequence)
+  XCTAssertEqual(Set(changed.entries.map(\.path)),Set(["Library/Notes/Item 9.md","Library/Notes/Item 10.md"]))
+  let directory=a.store.root.appendingPathComponent("Library")
+  try FileManager.default.moveItem(at:directory,to:base.appendingPathComponent("Moved library"))
+  try FileManager.default.createSymbolicLink(at:directory,withDestinationURL:b.store.root)
+  try write(b,"Notes/Item 9.md","Outside the vault")
+  a.invalidate();XCTAssertThrowsError(try a.scan())
+  XCTAssertNotEqual(try a.entry("Library/Notes/Item 9.md")?.hash,VaultStore.fingerprint(Data("Outside the vault".utf8)))
+ }
+ func testConnectionUsesReachableRouteAndCancelsTheStalledRoute()async throws {
+  let secret=Data(repeating:39,count:32)
+  let(listener,port)=try await listening(secret:secret,server:PeerTransfer(catalog:a));defer{listener.cancel()}
+  // A plain TCP listener accepts but never answers the TLS handshake.
+  let stalled=try NWListener(using:.tcp,on:.any),queue=DispatchQueue(label:"test.stalled.route")
+  var sockets=[NWConnection]()
+  stalled.newConnectionHandler={connection in sockets.append(connection);connection.start(queue:queue)}
+  let stalledPort=try await withCheckedThrowingContinuation{(c:CheckedContinuation<NWEndpoint.Port,Error>) in
+   var pending=true;stalled.stateUpdateHandler={state in guard pending else{return};if case .ready=state{pending=false;c.resume(returning:stalled.port!)}else if case .failed(let e)=state{pending=false;c.resume(throwing:e)}};stalled.start(queue:queue)
+  }
+  defer{stalled.cancel();queue.sync{sockets.forEach{$0.cancel()}}}
+  let began=Date()
+  let channel=try await PeerChannel.connect(to:[.hostPort(host:"127.0.0.1",port:stalledPort),.hostPort(host:"127.0.0.1",port:port)],secret:secret)
+  defer{channel.close()}
+  XCTAssertLessThan(Date().timeIntervalSince(began),5,"A stale route must not hold up a reachable peer")
+  let response=try await channel.request("hello")
+  XCTAssertEqual(response["device"] as? String,"A")
+ }
  func testBonjourCollisionSuffixNeverCreatesASelfPeer() {
   let group="0123456789abcdef0123456789abcdef",local="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",remote="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",prefix=String(group.prefix(12))+"-"
   for suffix in [""," (2)"," (12)"] {

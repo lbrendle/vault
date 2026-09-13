@@ -1,4 +1,4 @@
-# Building Archii Vault
+# Building Vault
 
 ## Tools
 
@@ -25,7 +25,7 @@ Choose **ArchiiVaultMac** for macOS or **ArchiiVault** for iOS/iPadOS. The gener
 
 ```sh
 bash scripts/build-app.sh
-open 'dist/Archii Vault.app'
+open 'dist/Vault.app'
 ```
 
 This makes a local, ad-hoc-signed app. For Developer ID signing, set `VAULT_SIGNING_IDENTITY` to your own identity when running the script. `VAULT_APP_OUTPUT` and `VAULT_DERIVED_DATA` optionally change output and build-cache locations. A signed app is not automatically notarized. Distributors must submit their build to Apple's notarization service and staple the accepted ticket before claiming notarization.
@@ -61,4 +61,4 @@ Native smoke tests live in `native/Tests/LocalModelDeviceTests.swift`. They use 
 
 Review the full public tree, update version/build numbers, run tests and native builds, and scan the staged tree for secrets. Generate dependency notices whenever lockfiles change. Make a tag and publish checksums alongside assets. Never include private vault contents, development-signed mobile IPAs, local preferences, test device exports, or historical private source commits.
 
-For a Mac Starter edition, copy the checksum-verified 2B folder into `Archii Vault.app/Contents/Resources/Models/` **before signing and notarizing**. The app reads bundled models directly without creating a second weights copy. The larger starter remains available in Settings. Models keep their own LICENSE and NOTICE files.
+For a Mac Starter edition, copy the checksum-verified 2B folder into `Vault.app/Contents/Resources/Models/` **before signing and notarizing**. The app reads bundled models directly without creating a second weights copy. The larger starter remains available in Settings. Models keep their own LICENSE and NOTICE files.

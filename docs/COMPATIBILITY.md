@@ -1,6 +1,6 @@
 # Compatibility and limits
 
-Archii Vault is an independent application using ordinary files. This beta does not claim exact Obsidian parity.
+Vault is an independent application using ordinary files. This beta does not claim exact Obsidian parity.
 
 | Area | Available | Current limits |
 | --- | --- | --- |

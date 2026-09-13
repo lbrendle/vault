@@ -2,7 +2,7 @@
 
 Only the latest public beta receives fixes. This project has not undergone an independent security audit.
 
-Please report suspected vulnerabilities through [GitHub private vulnerability reporting](https://github.com/lbrendle/archii-vault/security/advisories/new). Do not include personal notes, model prompts, pairing secrets, credentials, or device profiles. Provide a minimal synthetic reproduction, affected version, impact, and suggested mitigation when possible.
+Please report suspected vulnerabilities through [GitHub private vulnerability reporting](https://github.com/lbrendle/vault/security/advisories/new). Do not include personal notes, model prompts, pairing secrets, credentials, or device profiles. Provide a minimal synthetic reproduction, affected version, impact, and suggested mitigation when possible.
 
 The app handles untrusted documents, model metadata, and peer transfers. Useful review areas include path traversal and symlinks, WebKit bridge boundaries, Markdown sanitization, content security policy, PDF resource/range loading, atomic file updates, conflict preservation, peer authentication, bounded memory, and checksum verification.
 

@@ -10,10 +10,10 @@ enum PairedModel {
    let selected=models.first(where:{$0["id"] as? String==saved}) ?? models.first(where:{$0["recommended"] as? Bool==true}) ?? models.first
    args["model_id"]=selected?["id"] as? String ?? ""
   }
-  var continuation:AsyncStream<[String:Any]>.Continuation!
-  let events=AsyncStream<[String:Any]>{continuation=$0}
+  let (events,continuation)=AsyncStream<[String:Any]>.makeStream()
+  let request=args
   let model=LocalModel{event in continuation.yield(event);if event["event"] as? String=="unloaded"{continuation.finish()}}
-  await MainActor.run {model.call(args){_,error in if let error {continuation.yield(["event":"error","data":["message":error]]);continuation.yield(["event":"unloaded","data":[:]]);continuation.finish()}}}
+  await MainActor.run {model.call(request){_,error in if let error {continuation.yield(["event":"error","data":["message":error]]);continuation.yield(["event":"unloaded","data":[:]]);continuation.finish()}}}
   do{for await event in events {try await channel.send(["model":event])}}catch{model.stop();continuation.finish();throw error}
  }
 }

@@ -4,7 +4,7 @@ import {api} from './api';
 import {enhanceReader} from './readerEnhancements';
 import MarkdownWorker from './markdown.worker.js?worker&inline';
 const sectionHeight=(section,width)=>Math.max(120,Math.ceil(section.characters/Math.max(28,width/8))*25+section.headings.length*35);
-export default function Reader({content='',path,onLink,anchor,onTaskToggle}){
+export default function Reader({content='',path,onLink,anchor,onTaskToggle,chat=false}){
  const lastPath=useRef(),host=useRef(),pane=useRef(),jump=useRef(()=>{}),callbacks=useRef({onLink,onTaskToggle}),[formatting,setFormatting]=useState(false),[error,setError]=useState('');callbacks.current={onLink,onTaskToggle};
  useEffect(()=>{
   const el=host.current;if(!el)return;let cancelled=false,worker,observer,resizeObserver,cleanup=[],sections=[],pending=new Set(),mounted=new Map(),visible=new Set(),targetAnchor=anchor,printing=false,prepared=false,formatError,printResolve,printReject;
@@ -16,10 +16,10 @@ export default function Reader({content='',path,onLink,anchor,onTaskToggle}){
   const findAnchor=value=>[...el.querySelectorAll('[id]')].find(e=>e.id===decodeURIComponent(value));
   const request=index=>{if(!worker||pending.has(index)||mounted.has(index))return;pending.add(index);worker.postMessage({kind:'render',index})};
   jump.current=value=>{targetAnchor=value;if(!value)return;const found=findAnchor(value);if(found){within(found);targetAnchor=null;return}const index=sections.findIndex(s=>s.headings.includes(decodeURIComponent(value)));if(index>=0){within(el.children[index]);request(index)}};
-  const click=e=>{const task=e.target.closest('input[data-task]');if(task){if(!task.closest('.embedded-note')&&callbacks.current.onTaskToggle)callbacks.current.onTaskToggle(Number(task.dataset.task),task.checked);else task.checked=!task.checked;return}const a=e.target.closest('a,[data-wiki]');if(!a)return;e.preventDefault();if(a.dataset.wiki){callbacks.current.onLink?.(a.dataset.wiki);return}const href=a.getAttribute('href');if(href?.startsWith('#'))jump.current(href.slice(1));else if(/^https?:|^mailto:/i.test(href||''))api('openExternal',{url:href});else if(href)callbacks.current.onLink?.(href)};
+  const click=e=>{const task=e.target.closest('input[data-task]');if(task){if(!task.closest('.embedded-note')&&callbacks.current.onTaskToggle)callbacks.current.onTaskToggle(Number(task.dataset.task),task.checked);else task.checked=!task.checked;return}const a=e.target.closest('a,[data-wiki]');if(!a)return;e.preventDefault();if(a.dataset.wiki){callbacks.current.onLink?.(a.dataset.wiki);return}const href=a.getAttribute('href');if(href?.startsWith('#'))jump.current(href.slice(1));else if(/^https?:|^mailto:/i.test(href||''))api('openExternal',{url:href});else if(href)callbacks.current.onLink?.(decodeDocumentLink(href))};
   el.addEventListener('click',click);setError('');setFormatting(content.length>80000);
   // A short first-screen preview appears before a large document is parsed.
-  el.replaceChildren(renderFragment(content.length>80000?content.slice(0,12000):content));
+  el.replaceChildren(renderFragment(content.length>80000?content.slice(0,12000):content,{chat}));
   if(content.length<=80000){cleanup.push(enhanceReader(el,path));jump.current(anchor)}else{
    worker=new MarkdownWorker();
    worker.onmessage=({data})=>{if(cancelled)return;
@@ -40,12 +40,14 @@ export default function Reader({content='',path,onLink,anchor,onTaskToggle}){
     }
    };
    worker.onerror=()=>{if(!cancelled){setError('Could not finish formatting. The complete file is available in Source mode.');setFormatting(false);formatError=new Error('Document formatting failed');printReject?.(formatError)}};
-   worker.postMessage({kind:'prepare',content});
+   worker.postMessage({kind:'prepare',content,chat});
   }
   return()=>{cancelled=true;printReject?.(new Error('Document closed'));delete pane.current?.preparePrint;worker?.terminate();observer?.disconnect();resizeObserver?.disconnect();cleanup.forEach(dispose=>dispose());mounted.forEach(dispose=>dispose());el.removeEventListener('click',click);jump.current=()=>{}};
- },[content,path]);
+ },[content,path,chat]);
  useEffect(()=>{jump.current(anchor)},[anchor]);
  return <div key={path} ref={pane} className="reader-scroll"><article ref={host} className="prose"/>{formatting&&<div className="reader-progress" role="status">Opening the rest of this document…</div>}{error&&<p className="reader-error" role="alert">{error}</p>}</div>;
 }
 
 export async function prepareReaderForPrint(){const pane=document.querySelector('.document-body > .reader-scroll');return pane?.preparePrint?pane.preparePrint():()=>{}}
+
+function decodeDocumentLink(href){try{return decodeURIComponent(href)}catch{return href}}

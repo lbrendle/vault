@@ -1,6 +1,6 @@
 # Third-party software and assets
 
-Archii Vault's own source is Apache-2.0. Each dependency retains its own license. This inventory is generated from the committed npm and Swift resolution files; license texts are reproduced alongside it. Development-only npm packages are not part of this runtime inventory. PDF.js also carries separate resource notices under `docs/licenses` and its distributed `cmaps`, `standard_fonts`, `wasm`, and `iccs` directories.
+Vault's own source is Apache-2.0. Each dependency retains its own license. This inventory is generated from the committed npm and Swift resolution files; license texts are reproduced alongside it. Development-only npm packages are not part of this runtime inventory. PDF.js also carries separate resource notices under `docs/licenses` and its distributed `cmaps`, `standard_fonts`, `wasm`, and `iccs` directories.
 
 Qwen starter weights are distributed under their upstream Apache-2.0 licenses. Model revisions, checksums, licenses, and conversion attribution are in `models/`. A checkpoint's presence does not imply endorsement by its publisher.
 

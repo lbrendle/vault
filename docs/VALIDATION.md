@@ -7,3 +7,11 @@ The initial release includes automated coverage for document indexing and edits,
 The Qwen 3.5 4B checkpoint completed a native local text-generation smoke test on iPhone 17 Pro and iPad Pro M5 during pre-release development. This establishes that the integration can execute on those devices; it is not a general benchmark or a claim that every device can fit that model. See the release notes for checks performed against the exact published revision.
 
 A compile is not a physical-device inference result. Local execution is not the same as a separately observed radios-off test. Full Obsidian parity, universal hardware support, independent security auditing, App Store approval, and seamless iOS background networking are not claimed.
+
+## Starter model quality
+
+Native 4B inference passed a small fictional evidence-and-arithmetic check on an iPhone 17 Pro and an Apple silicon Mac. The 2B model completed generation but gave an incorrect percentage difference with thinking disabled. Treat the smaller model as a lightweight drafting companion; verify calculations and factual claims against the sources. These checks are integration smoke tests, not general model benchmarks.
+
+## Reader and connectivity regressions
+
+Tests cover tag-array display/edit round trips, chat citations wrapped in inline code, document links containing spaces, and simultaneous connection attempts when one local route stalls. Sync preserves its authenticated transport on every route. Returning to the foreground refreshes local discovery; diagnostics stored locally omit pairing keys, document content, and device identifiers.

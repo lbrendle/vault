@@ -29,3 +29,24 @@
 .prose pre[data-code-segment] { margin-block:0; border-radius:0; border-block-width:0; padding-block:0; }
 .prose pre[data-code-segment=first] { margin-top:1em; padding-top:16px; border-top-width:1px; border-radius:10px 10px 0 0; }
 .prose pre[data-code-segment=last] { margin-bottom:1em; padding-bottom:16px; border-bottom-width:1px; border-radius:0 0 10px 10px; }
+
+/* Properties share the reader width and never truncate a tag list. */
+.document-properties { flex-shrink:0; min-width:0; font-size:12px; }
+.document-properties > .property-list { gap:2px; max-height:240px; overscroll-behavior:contain; }
+.property-row { display:grid; grid-template-columns:minmax(70px,130px) minmax(0,1fr); align-items:start; gap:12px; padding:4px 0; }
+.property-name { display:flex; gap:6px; align-items:center; padding-top:7px; color:var(--muted); min-width:0; overflow-wrap:anywhere; }
+.property-name svg { flex-shrink:0; }
+.document-properties .property-value { align-items:center; width:100%; min-width:0; gap:12px; padding:4px 6px; border-radius:8px; }
+.document-properties .property-value > span { width:auto; flex:1; min-width:0; color:var(--text); white-space:pre-wrap; overflow-wrap:anywhere; }
+.property-tags { display:flex; flex-wrap:wrap; gap:5px; }
+.property-tag { display:inline-flex; align-items:baseline; gap:3px; max-width:100%; padding:3px 8px; border-radius:7px; background:var(--surface); color:var(--text); overflow-wrap:anywhere; }
+.property-tag > span { color:var(--muted); }
+.property-edit-icon { flex-shrink:0; color:var(--muted); opacity:.5; }
+.property-value:hover .property-edit-icon,.property-value:focus-visible .property-edit-icon { opacity:1; }
+.property-empty { color:var(--muted); font-weight:400; }
+.property-editor { min-width:0; }
+.property-editor textarea { width:100%; min-width:0; resize:vertical; max-height:140px; font:inherit; line-height:1.5; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); }
+.property-editor small { display:block; color:var(--muted); padding:5px 0; }
+.property-editor-actions { display:flex; gap:8px; }
+.property-editor-actions button { align-items:center; }
+@media (max-width:650px) { .document-properties { margin-inline:16px; } .property-row { grid-template-columns:minmax(65px,90px) minmax(0,1fr); gap:6px; } }

@@ -73,15 +73,29 @@ public final class SyncCatalog: @unchecked Sendable {
     public func scan()throws {
         lock.lock();defer{lock.unlock()};if Date().timeIntervalSince(lastFullScan)<120{return};let generation=UUID().uuidString
         var failed=false
-        let keys:[URLResourceKey]=[.isDirectoryKey,.isSymbolicLinkKey]
+        let keys:[URLResourceKey]=[.isDirectoryKey,.isSymbolicLinkKey,.isRegularFileKey,.fileSizeKey,.contentModificationDateKey]
         guard let iterator=FileManager.default.enumerator(at:store.root,includingPropertiesForKeys:keys,options:[],errorHandler:{_,_ in failed=true;return true})else{throw VaultError.message("Vault is not available for sync")}
-        var batch=[String]()
-        func flush()throws {try db.transaction{for path in batch{try observe(path,seen:generation)}};batch.removeAll(keepingCapacity:true)}
+        var batch=[(String,URLResourceValues)]()
+        func flush()throws {
+            try db.transaction {for (path,values) in batch {
+                let previous=try db.execute("SELECT modified,size,deleted FROM entries WHERE path=?",[path]).first
+                if values.isRegularFile==true,previous?["deleted"] as? Int==0,
+                   previous?["size"] as? Int==values.fileSize,
+                   previous?["modified"] as? Double==values.contentModificationDate?.timeIntervalSince1970 {
+                    // Enumeration already excludes symlinks and excluded ancestors.
+                    // Reuse metadata for unchanged entries without reopening every
+                    // path component. Content reads/transfers still use safeURL
+                    // and validate the stored checksum before anything is sent.
+                    try db.execute("UPDATE entries SET seen=? WHERE path=?",[generation,path])
+                }else{try observe(path,seen:generation)}
+            }}
+            batch.removeAll(keepingCapacity:true)
+        }
         for case let url as URL in iterator {
             let path=String(url.path.dropFirst(store.root.path.count+1)),v=try url.resourceValues(forKeys:Set(keys))
             if v.isSymbolicLink==true {iterator.skipDescendants();continue}
             if v.isDirectory==true {if !store.rules.includes(path,directory:true){iterator.skipDescendants()};continue}
-            if store.rules.includes(path){batch.append(path)}
+            if store.rules.includes(path){batch.append((path,v))}
             if batch.count>=128{try flush()}
         }
         try flush();guard !failed else{throw VaultError.message("Some folders were unavailable. Sync paused to protect your files.")}

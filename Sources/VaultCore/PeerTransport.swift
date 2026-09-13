@@ -14,7 +14,7 @@ public enum PeerTLS {
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions,.TLSv12)
         sec_protocol_options_set_max_tls_protocol_version(tls.securityProtocolOptions,.TLSv12)
         sec_protocol_options_append_tls_ciphersuite(tls.securityProtocolOptions,tls_ciphersuite_t(rawValue:0xCCAC)!) // ECDHE_PSK_CHACHA20_POLY1305_SHA256
-        let tcp=NWProtocolTCP.Options();tcp.noDelay=true
+        let tcp=NWProtocolTCP.Options();tcp.noDelay=true;tcp.enableKeepalive=true;tcp.keepaliveIdle=15;tcp.keepaliveInterval=5;tcp.keepaliveCount=3
         let p=NWParameters(tls:tls,tcp:tcp);p.includePeerToPeer=true
         return p
     }
@@ -22,7 +22,10 @@ public enum PeerTLS {
 private final class PeerReadiness: @unchecked Sendable {
     private let lock=NSLock()
     private var continuation:CheckedContinuation<Void,Error>?
+    private var waiting:String?
     init(_ continuation:CheckedContinuation<Void,Error>){self.continuation=continuation}
+    func recordWaiting(_ error:Error){lock.lock();waiting=error.localizedDescription;lock.unlock()}
+    var waitingError:String? {lock.lock();defer{lock.unlock()};return waiting}
     @discardableResult func complete(_ result:Result<Void,Error>)->Bool {
         lock.lock();let pending=continuation;continuation=nil;lock.unlock()
         guard let pending else{return false};pending.resume(with:result);return true
@@ -38,7 +41,28 @@ public final class PeerChannel: @unchecked Sendable {
     public let connection:NWConnection
     private let queue=DispatchQueue(label:"vault.peer.transport",qos:.utility)
     public init(_ connection:NWConnection){self.connection=connection}
+    /// Bonjour can advertise Wi-Fi, peer-to-peer and USB routes at once. Race
+    /// scoped routes so one stale interface cannot stall a reachable peer.
+    public static func connect(to endpoints:[NWEndpoint],secret:Data)async throws->PeerChannel {
+        guard !endpoints.isEmpty else{throw VaultError.message("No local route to the paired device")}
+        return try await withThrowingTaskGroup(of:PeerChannel.self){group in
+            for endpoint in endpoints.prefix(4) {group.addTask {
+                let channel=PeerChannel(NWConnection(to:endpoint,using:PeerTLS.parameters(secret:secret)))
+                do {try await channel.ready();try Task.checkCancellation();return channel}
+                catch {channel.close();throw error}
+            }}
+            var selected:PeerChannel?,failure:Error?
+            while !group.isEmpty {
+                do {if let channel=try await group.next(){if selected==nil{selected=channel;group.cancelAll()}else{channel.close()}}}
+                catch {failure=error}
+            }
+            if let selected {if Task.isCancelled{selected.close();throw CancellationError()};return selected}
+            throw failure ?? VaultError.message("The paired device could not connect")
+        }
+    }
     public func ready()async throws {
+        try await withTaskCancellationHandler(operation:{
+        try Task.checkCancellation()
         try await withCheckedThrowingContinuation{(continuation:CheckedContinuation<Void,Error>) in
             let readiness=PeerReadiness(continuation)
             connection.stateUpdateHandler={state in
@@ -46,12 +70,19 @@ public final class PeerChannel: @unchecked Sendable {
                 case .ready:readiness.complete(.success(()))
                 case .failed(let e):readiness.complete(.failure(e))
                 case .cancelled:readiness.complete(.failure(VaultError.message("Peer disconnected")))
+                case .waiting(let error):readiness.recordWaiting(error)
                 default:break
                 }
             }
-            queue.asyncAfter(deadline:.now()+15){[weak self] in if readiness.complete(.failure(VaultError.message("The paired device could not connect"))) {self?.connection.cancel()}}
+            queue.asyncAfter(deadline:.now()+15){[weak self] in
+                var message="The paired device could not connect. Keep Vault open on both devices."
+                if self?.connection.currentPath?.unsatisfiedReason == .localNetworkDenied {message="Local Network access is disabled for Vault. Enable it in system Settings to sync."}
+                else if let waitingError=readiness.waitingError {message += " Network: "+waitingError}
+                if readiness.complete(.failure(VaultError.message(message))) {self?.connection.cancel()}
+            }
             connection.start(queue:queue)
         }
+        },onCancel:{self.close()})
     }
     public func close(){connection.cancel()}
     public func send(_ message:[String:Any])async throws {

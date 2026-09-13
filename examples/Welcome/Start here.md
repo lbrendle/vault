@@ -3,7 +3,7 @@ tags: [welcome, fieldnotes]
 ---
 # A little room to wonder
 
-A small, fictional library for exploring Archii Vault.
+A small, fictional library for exploring Vault.
 
 > [!tip] Make yourself at home
 > Open a note, follow a link, or ask your local model a question. Every file in this example was written for the demo.
