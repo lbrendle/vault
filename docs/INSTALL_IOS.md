@@ -2,7 +2,7 @@
 
 [Join the Vault TestFlight beta](https://testflight.apple.com/join/2G2ngjAk).
 
-The first public beta, **0.5.0 build 26**, was submitted to Apple on September 13, 2026 and is awaiting beta review. The invitation accepts installations after Apple approves the build. An unavailable invitation during this period does not mean your device or Apple account is misconfigured.
+The latest build is **0.5.0 (27)**, uploaded September 13, 2026 with the folder-navigation fix. The first public beta, build 26, is still awaiting Apple beta review. Build 27 is processed, attached to the public beta group, and ready for submission. Apple currently blocks its review submission while build 26 is pending; it must be submitted again after that review completes. The invitation accepts installations after Apple approves the build. An unavailable invitation during this period does not mean your device or Apple account is misconfigured.
 
 ## Install
 
