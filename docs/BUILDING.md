@@ -32,6 +32,8 @@ This makes a local, ad-hoc-signed app. For Developer ID signing, set `VAULT_SIGN
 
 ## iPhone and iPad
 
+For the public beta, see [TestFlight installation](INSTALL_IOS.md). The steps below are for building the source yourself.
+
 Select the **ArchiiVault** target. In Signing & Capabilities, choose **your own team**, enable automatic signing, and use a bundle identifier registered to your team. Connect and trust your device, enable Developer Mode if prompted, select it as the run destination, and run the app.
 
 The project defaults to unsigned builds; for CLI device builds pass `CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID -allowProvisioningUpdates`. The increased-memory-limit entitlement depends on provisioning support. If your team does not support it, remove that capability in your own generated project; local model size remains constrained by the app's OS memory allowance. Never commit a provisioning profile or signing key.

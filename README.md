@@ -57,7 +57,7 @@ Device sync uses an authenticated, encrypted direct connection on your local net
 
 Get the latest [release](https://github.com/lbrendle/vault/releases). Mac downloads target **Apple silicon, macOS 14+**. Release notes describe signing/notarization status; this beta is not distributed through the App Store.
 
-For iPhone/iPad, build with Xcode and your own signing team. The deployment target is iOS/iPadOS 17; actual model compatibility depends on hardware and available memory. There is no generally installable iOS IPA or TestFlight invitation in this release.
+For iPhone and iPad, use the [TestFlight invitation](https://testflight.apple.com/join/2G2ngjAk). **Build 26 is awaiting Apple beta review**, submitted September 13, 2026; the invitation will accept installations after approval. The app supports iOS/iPadOS 17+, with local model compatibility depending on hardware and available memory. Both Qwen starters are available in Settings → Models & chat. You can also build with Xcode and your own signing team. [iPhone and iPad installation](docs/INSTALL_IOS.md).
 
 ```sh
 git clone https://github.com/lbrendle/vault.git
