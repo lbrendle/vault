@@ -1,0 +1,115 @@
+/* Native iOS window geometry. The root never scrolls; each pane owns its overflow. */
+html[data-platform=ios],
+html[data-platform=ios] body,
+html[data-platform=ios] #root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+[data-platform=ios] .app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+[data-platform=ios] .onboarding {
+  height: 100%;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+[data-platform=ios] .sidebar {
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  width: 266px;
+  min-width: 266px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px calc(8px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+[data-platform=ios] .sidebar > :not(.file-list) { flex-shrink: 0; }
+[data-platform=ios] .sidebar .file-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+[data-platform=ios] .sidebar footer { margin-top: auto; }
+[data-platform=ios] .brand { height: 48px; }
+[data-platform=ios] .sidebar nav button { min-height: 44px; }
+[data-platform=ios] .workspace {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+[data-platform=ios] .titlebar {
+  flex-shrink: 0;
+  height: 56px;
+  min-height: 56px;
+  padding: 8px 22px;
+}
+[data-platform=ios] .main-pane,
+[data-platform=ios] .document-space,
+[data-platform=ios] .document-body,
+[data-platform=ios] .chat-main {
+  min-height: 0;
+  overflow: hidden;
+}
+[data-platform=ios] .settings-page { min-height: 0; max-height: 100%; }
+[data-platform=ios] :is(.settings-page,.home,.search-page,.reader-scroll,.chat-transcript,.history-scroll,.table-scroll,.inspector,.chat-popover,.modal) {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+[data-platform=ios] :is(.titlebar,.document-tabs,.document-toolbar,.document-status,.chat-header,.composer-region) { flex-shrink: 0; }
+[data-platform=ios] :is(.icon-button,.sidebar-bottom button,.document-toolbar button,.chat-header-actions .icon-button,.message-actions button) { min-width: 40px; min-height: 40px; }
+[data-platform=ios] :is(input,select,textarea,.chat-shell .chat-composer > textarea,.pairing-input) { font-size: 16px; }
+[data-platform=ios] .chat-shell.docked-chat {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+[data-platform=ios] .chat-popover { max-height: 65vh; overflow-y: auto; }
+[data-platform=ios] .modal-overlay { padding: max(20px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom)); }
+@media (min-width:761px) and (max-width:1100px) {
+  [data-platform=ios] .chat-shell.docked-chat {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(430px, 65%);
+    min-width: 350px;
+    z-index: 30;
+    box-shadow: -12px 0 36px #0002;
+  }
+}
+@media (max-width:760px) {
+  [data-platform=ios] .sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(300px, 84vw);
+    min-width: min(300px, 84vw);
+    z-index: 25;
+  }
+  [data-platform=ios] .titlebar { padding-inline: 14px; }
+  [data-platform=ios] .chat-shell.docked-chat {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    z-index: 30;
+  }
+  [data-platform=ios] .docked-chat .composer-region { padding-bottom: 10px; }
+  [data-platform=ios] .settings-page { padding-inline: 18px; }
+}
+[data-platform=ios] .app[data-sidebar=closed] > .sidebar {
+  width: 0;
+  min-width: 0;
+  padding-inline: 0;
+}

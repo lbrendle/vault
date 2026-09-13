@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data.
+body:
+  - type: markdown
+    attributes:
+      value: 'Please do not upload private vaults, conversations, pairing codes, or provisioning profiles. Security issues belong in private vulnerability reporting.'
+  - type: input
+    id: version
+    attributes:
+      label: Version, device, and OS
+      placeholder: '0.5.0-beta.1, Apple silicon Mac, macOS version'
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and expected behavior
+      description: Include a minimal fictional document if needed.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

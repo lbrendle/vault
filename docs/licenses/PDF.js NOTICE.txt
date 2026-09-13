@@ -1,0 +1,5 @@
+PDF.js 6.3.289
+Copyright Mozilla Foundation and individual contributors.
+https://github.com/mozilla/pdf.js
+Distributed under the Apache License, Version 2.0.
+Vault bundles the renderer and integrates its viewer through a local native file bridge.

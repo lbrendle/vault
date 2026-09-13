@@ -1,0 +1,51 @@
+/* Quiet materials. Motion and geometry live in workspace.css. */
+html,body { background:var(--bg); }
+.app,.workspace,.chat-shell,.chat-main,.composer-region,.document-body { background:var(--bg); }
+.sidebar { margin:8px 0 8px 8px; height:calc(100% - 16px); padding-top:30px; border:0; border-radius:16px; background:var(--sidebar); box-shadow:none; transition:flex-basis 280ms var(--ease),width 280ms var(--ease),padding 280ms var(--ease),margin 280ms var(--ease); }
+.app[data-sidebar=closed] > .sidebar { margin-inline:0; }
+.sidebar nav,.sidebar footer,.sidebar-bottom,.document-tabs,.document-status,.inspector,.archive-toggle { border:0; }
+.sidebar nav { margin-bottom:8px; padding-bottom:10px; }
+.sidebar nav button.selected { color:var(--text); background:var(--surface); }
+.sidebar .vault-picker { background:transparent; color:var(--muted); }
+.sidebar .vault-picker:hover { background:var(--surface); }
+.file-row.active,.history-item.selected { background:var(--surface); }
+.titlebar-actions .chat-toggle { background:var(--surface); border:0; color:var(--text); border-radius:10px; }
+.document-tabs > button.selected { background:var(--surface); border-radius:8px; }
+.view-switch { background:var(--sidebar); border:0; border-radius:10px; }
+.view-switch .selected { background:var(--bg); border-radius:7px; box-shadow:0 1px 3px #00000009; }
+.inspector { margin:8px; border-radius:14px; background:var(--sidebar); }
+.conversation-list { margin:8px 0 8px 8px; height:calc(100% - 16px); border:0; border-radius:16px; background:var(--sidebar); box-shadow:none; }
+.history-search { background:var(--surface); border:0; border-radius:10px; }
+.suggestion-grid button { border:0; border-radius:14px; background:var(--sidebar); }
+.suggestion-grid button:hover { background:var(--surface); }
+.chat-composer { background:var(--sidebar); border:1px solid color-mix(in srgb,var(--text) 7%,transparent); border-radius:24px; box-shadow:0 3px 16px #00000004; }
+.chat-composer:focus-within { border-color:color-mix(in srgb,var(--text) 15%,transparent); box-shadow:0 3px 16px #00000006; }
+.source-chip { background:var(--bg); border:0; border-radius:7px; }
+.user-bubble { background:var(--surface); }
+.settings-top { border:0; padding-bottom:16px; }
+.settings-top > .icon-button { border:0; background:var(--sidebar); border-radius:10px; }
+.settings-nav button.selected { background:var(--sidebar); }
+.settings-card { border:0; border-radius:16px; background:var(--sidebar); }
+.setting-row { border:0; padding-block:18px; }
+.setting-row + .setting-row { padding-top:12px; }
+.segmented { background:var(--surface); border:0; border-radius:10px; padding:3px; }
+.segmented button.selected { background:var(--bg); box-shadow:0 1px 4px #00000008; }
+.theme-card { border-radius:12px; }
+.theme-card.selected { background:var(--sidebar); }
+.theme-card.selected .theme-preview { outline:1px solid var(--accent); outline-offset:3px; }
+.theme-preview { border:0!important; border-radius:9px!important; }
+.theme-filter button { border:0; background:var(--sidebar); }
+.theme-filter button.selected { background:var(--text); color:var(--bg); }
+.model-library-card { border:0; background:var(--sidebar); border-radius:16px; }
+.model-library-card.selected { box-shadow:0 0 0 1px var(--accent); }
+.model-tags span { border:0; background:var(--surface); }
+.sync-hero { border:0; border-radius:18px; background:var(--sidebar); }
+.graph-controls,.graph-selection { background:var(--sidebar); border:0; box-shadow:0 3px 15px #00000006; }
+.home-search { background:var(--sidebar); border:0; border-radius:17px; box-shadow:none; }
+.home-actions button,.recent-heading,.recent-list > button { border:0; }
+.recent-icon { background:var(--sidebar); border-radius:10px; }
+.chat-route .popover-row { border:0; background:var(--sidebar); border-radius:13px; padding:18px; }
+.chat-route .controls-popover label { border:0; padding:18px; background:var(--sidebar); border-radius:13px; margin-bottom:8px; }
+[data-platform=ios] .sidebar { padding-top:14px; margin-top:calc(env(safe-area-inset-top) + 8px); height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); padding-bottom:8px; }
+[data-platform=ios][data-keyboard=open] .sidebar { height:calc(100% - env(safe-area-inset-top) - 16px); }
+@media(max-width:650px) { .app[data-sidebar=open] > .sidebar { margin-right:8px; } .full-chat.history-open .conversation-list { margin-right:8px; } }

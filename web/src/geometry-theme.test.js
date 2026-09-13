@@ -1,0 +1,7 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {themes,contrast} from './themes.js';import {zoomAt,worldPoint,fitGraph} from './graphGeometry.js';
+test('every theme has readable text, labels and accents across its surfaces',()=>{assert.equal(themes.length,24);assert.equal(new Set(themes.map(t=>t.id)).size,24);for(const theme of themes)for(const mode of ['light','dark']){const v=theme[mode];for(const ink of [5,6,7,9])for(const background of [0,1,2,3,4,10])assert.ok(contrast(v[ink],v[background])>=4.5,`${theme.id} ${mode} role ${ink} on ${background}`)}});
+test('zoom preserves the world point beneath the pointer and clamps scale',()=>{const t={x:80,y:-30,k:.6},p={x:220,y:170},a=worldPoint(p,t),b=worldPoint(p,zoomAt(t,p,2));assert.ok(Math.abs(a.x-b.x)<1e-9&&Math.abs(a.y-b.y)<1e-9);assert.equal(zoomAt(t,p,100).k,12);assert.equal(zoomAt(t,p,.000001).k,.00001)});
+test('fit includes distant nodes in the visible window',()=>{const nodes=[{x:-600,y:140},{x:700,y:-400}],t=fitGraph(nodes,820,500);for(const n of nodes){const p={x:n.x*t.k+t.x,y:n.y*t.k+t.y};assert.ok(p.x>=30&&p.x<=790&&p.y>=30&&p.y<=470)}});
+
+ test('viewport edges retain visible connections without offscreen crossing noise',async()=>{const {viewportEdges}=await import('./graphGeometry.js');assert.deepEqual([...viewportEdges([[1,2],[0,2],[0,1,3],[2,4],[3]],[0,1])],[0,1,0,2,1,2]);assert.equal(viewportEdges([[1],[0]],[]).length,0)});

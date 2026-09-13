@@ -1,0 +1,6 @@
+Qwen 3.5 starter models
+Original models: Qwen (Alibaba), https://huggingface.co/Qwen
+4-bit MLX conversions: MLX Community, https://huggingface.co/mlx-community
+Distributed under Apache License 2.0; see LICENSE.
+The conversion repository, pinned revision, filenames, and SHA-256 checksums are recorded in vault-model.json.
+Vault does not modify the downloaded model files. The converter quantized the original weights.

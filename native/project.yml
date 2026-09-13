@@ -1,0 +1,211 @@
+name: ArchiiVault
+options:
+  bundleIdPrefix: com.archii
+packages:
+  Vault:
+    path: ..
+  MLXLM:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    exactVersion: 3.31.4
+  MLX:
+    url: https://github.com/ml-explore/mlx-swift
+    exactVersion: 0.31.4
+  Transformers:
+    url: https://github.com/huggingface/swift-transformers
+    exactVersion: 1.3.0
+settings:
+  base:
+    SWIFT_VERSION: '5.9'
+    MARKETING_VERSION: '0.5.0'
+    CURRENT_PROJECT_VERSION: '20'
+    IPHONEOS_DEPLOYMENT_TARGET: '17.0'
+targets:
+  ArchiiVault:
+    type: application
+    platform: iOS
+    sources:
+      - path: Assets.xcassets
+      - path: ../Sources/VaultApp
+        excludes: [Resources]
+      - path: ../Sources/VaultApp/Resources/web
+        type: folder
+        buildPhase: resources
+      - path: ../models/starter-models.json
+        buildPhase: resources
+      - path: ../models/Qwen-LICENSE.txt
+        buildPhase: resources
+      - path: ../models/Qwen-NOTICE.txt
+        buildPhase: resources
+      - path: ../docs/licenses
+        type: folder
+        buildPhase: resources
+      - path: ../LICENSE
+        buildPhase: resources
+      - path: ../NOTICE
+        buildPhase: resources
+    entitlements:
+      path: Vault.entitlements
+      properties:
+        com.apple.developer.kernel.increased-memory-limit: true
+    info:
+      path: Info.plist
+      properties:
+        CFBundleShortVersionString: "0.5.0"
+        CFBundleVersion: "20"
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        "UISupportedInterfaceOrientations~ipad": [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSBonjourServices: ["_archiivault._tcp"]
+        NSLocalNetworkUsageDescription: Sync your vault directly with your paired devices. No cloud storage is used.
+    dependencies:
+      - package: Vault
+        product: VaultCore
+      - package: MLXLM
+        product: MLXLLM
+      - package: MLXLM
+        product: MLXLMCommon
+      - package: MLX
+        product: MLX
+      - package: Transformers
+        product: Tokenizers
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: Vault_graphite_light Vault_graphite_dark Vault_linen_light Vault_linen_dark Vault_sage_light Vault_sage_dark Vault_ocean_light Vault_ocean_dark Vault_iris_light Vault_iris_dark Vault_rose_light Vault_rose_dark Vault_slate_light Vault_slate_dark Vault_cocoa_light Vault_cocoa_dark Vault_butter_light Vault_butter_dark Vault_peach_light Vault_peach_dark Vault_terracotta_light Vault_terracotta_dark Vault_amber_light Vault_amber_dark Vault_forest_light Vault_forest_dark Vault_matcha_light Vault_matcha_dark Vault_moss_light Vault_moss_dark Vault_sandstone_light Vault_sandstone_dark Vault_riviera_light Vault_riviera_dark Vault_glacier_light Vault_glacier_dark Vault_blue_hour_light Vault_blue_hour_dark Vault_midnight_light Vault_midnight_dark Vault_cherry_light Vault_cherry_dark Vault_orchid_light Vault_orchid_dark Vault_plum_light Vault_plum_dark Vault_ink_light Vault_ink_dark
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Sync your vault directly with your paired devices. No cloud storage is used.
+        TARGETED_DEVICE_FAMILY: '1,2'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Archii Vault
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIFileSharingEnabled: YES
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+        INFOPLIST_KEY_UISupportsDocumentBrowser: YES
+        CODE_SIGNING_ALLOWED: NO
+
+  ArchiiVaultMac:
+    type: application
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+      - path: ../Sources/VaultApp
+        excludes: [Resources]
+      - path: ../Sources/VaultApp/Resources/web
+        type: folder
+        buildPhase: resources
+      - path: ../Sources/VaultApp/Resources/icons
+        type: folder
+        buildPhase: resources
+      - path: ../assets/Vault.icns
+        buildPhase: resources
+      - path: ../models/starter-models.json
+        buildPhase: resources
+      - path: ../models/Qwen-LICENSE.txt
+        buildPhase: resources
+      - path: ../models/Qwen-NOTICE.txt
+        buildPhase: resources
+      - path: ../docs/licenses
+        type: folder
+        buildPhase: resources
+      - path: ../LICENSE
+        buildPhase: resources
+      - path: ../NOTICE
+        buildPhase: resources
+    dependencies:
+      - package: Vault
+        product: VaultCore
+      - package: MLXLM
+        product: MLXLLM
+      - package: MLXLM
+        product: MLXLMCommon
+      - package: MLX
+        product: MLX
+      - package: Transformers
+        product: Tokenizers
+    info:
+      path: MacInfo.plist
+      properties:
+        CFBundleDisplayName: Archii Vault
+        CFBundleIconFile: Vault
+        CFBundleShortVersionString: '0.5.0'
+        CFBundleVersion: '20'
+        LSMultipleInstancesProhibited: true
+        NSHighResolutionCapable: true
+        NSBonjourServices: ['_archiivault._tcp']
+        NSLocalNetworkUsageDescription: Sync directly with your paired devices. No cloud storage is used.
+        NSHumanReadableCopyright: Copyright 2026 Archii Vault contributors
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault
+        PRODUCT_NAME: Archii Vault
+        CODE_SIGNING_ALLOWED: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        ARCHS: arm64
+
+  ArchiiVaultMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+      - path: Tests
+      - path: ../Sources/VaultApp/LocalModel.swift
+    dependencies:
+      - target: ArchiiVaultMac
+      - package: Vault
+        product: VaultCore
+      - package: MLXLM
+        product: MLXLLM
+      - package: MLXLM
+        product: MLXLMCommon
+      - package: MLX
+        product: MLX
+      - package: Transformers
+        product: Tokenizers
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault.mactests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Archii Vault.app/Contents/MacOS/Archii Vault"
+        CODE_SIGNING_ALLOWED: NO
+        ARCHS: arm64
+
+  ArchiiVaultTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+      - path: ../Sources/VaultApp/LocalModel.swift
+    dependencies:
+      - target: ArchiiVault
+      - package: Vault
+        product: VaultCore
+      - package: MLXLM
+        product: MLXLLM
+      - package: MLXLM
+        product: MLXLMCommon
+      - package: MLX
+        product: MLX
+      - package: Transformers
+        product: Tokenizers
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault.tests
+schemes:
+  ArchiiVault:
+    build:
+      targets:
+        ArchiiVault: all
+    test:
+      config: Release
+      targets:
+        - ArchiiVaultTests
+
+  ArchiiVaultMac:
+    build:
+      targets:
+        ArchiiVaultMac: all
+    test:
+      config: Release
+      targets:
+        - ArchiiVaultMacTests

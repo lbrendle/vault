@@ -1,0 +1,31 @@
+/* One reading width on every device. Only structured content scrolls sideways. */
+.reader-scroll { min-width:0; max-width:100%; overflow-x:hidden; overflow-y:auto; }
+.document-body > .reader-scroll,
+[data-platform=ios] .document-body > .reader-scroll { padding:0; }
+.reader-scroll > .prose { display:flow-root; width:100%; min-width:0; overflow-wrap:anywhere; word-break:normal; }
+.prose :where(p,li,a,blockquote,h1,h2,h3,h4,h5,h6,dt,dd,figcaption,code) { overflow-wrap:anywhere; }
+.prose :where(div,section,aside,figure,blockquote,p,ul,ol,dl,h1,h2,h3,h4,h5,h6) { min-width:0!important; max-width:100%!important; }
+.prose :where(img,video,svg) { max-width:100%; height:auto; }
+.prose figure { margin-inline:0; }
+.prose pre:not(.mermaid) { max-width:100%; white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; }
+.prose pre:not(.mermaid) code { white-space:inherit; }
+.prose :not(pre) > code { white-space:normal; }
+.prose .markdown-table-scroll { width:100%; overflow-x:auto; overscroll-behavior-x:contain; margin:1.2em 0; border-radius:8px; }
+.prose .markdown-table-scroll:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.prose .markdown-table-scroll > table { display:table; width:100%; min-width:100%; max-width:none; margin:0; overflow:visible; }
+.prose .markdown-table-scroll :is(th,td) { max-width:28rem; }
+.prose .katex-display,
+.prose .mermaid { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; }
+.prose .katex-display { padding-block:.25em; }
+.prose .embedded-note { width:100%; overflow-x:hidden; overflow-y:auto; }
+.chat-scroll { min-width:0; overflow-x:hidden; }
+.chat-turn .reader-scroll { min-width:0; max-width:100%; }
+@media print { .reader-scroll,.prose .markdown-table-scroll { overflow:visible; } }
+/* Long notes keep only nearby sections mounted; placeholders retain scroll space. */
+.prose .markdown-section { display:flow-root; overflow-anchor:auto; }
+.reader-progress { position:sticky; bottom:12px; width:max-content; max-width:90%; margin:0 auto 16px; padding:8px 12px; border-radius:10px; background:var(--sidebar); color:var(--muted); font-size:12px; }
+.reader-error { padding:16px 24px; color:var(--muted); }
+
+.prose pre[data-code-segment] { margin-block:0; border-radius:0; border-block-width:0; padding-block:0; }
+.prose pre[data-code-segment=first] { margin-top:1em; padding-top:16px; border-top-width:1px; border-radius:10px 10px 0 0; }
+.prose pre[data-code-segment=last] { margin-bottom:1em; padding-bottom:16px; border-bottom-width:1px; border-radius:0 0 10px 10px; }
