@@ -17,7 +17,7 @@ settings:
   base:
     SWIFT_VERSION: '5.9'
     MARKETING_VERSION: '0.5.0'
-    CURRENT_PROJECT_VERSION: '25'
+    CURRENT_PROJECT_VERSION: '26'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
 targets:
   ArchiiVault:
@@ -25,6 +25,8 @@ targets:
     platform: iOS
     sources:
       - path: Assets.xcassets
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
       - path: ../Sources/VaultApp
         excludes: [Resources]
       - path: ../Sources/VaultApp/Resources/web
@@ -51,7 +53,8 @@ targets:
       path: Info.plist
       properties:
         CFBundleShortVersionString: "0.5.0"
-        CFBundleVersion: "25"
+        CFBundleVersion: "26"
+        ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         "UISupportedInterfaceOrientations~ipad": [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSBonjourServices: ["_archiivault._tcp"]
@@ -88,6 +91,8 @@ targets:
     platform: macOS
     deploymentTarget: '14.0'
     sources:
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
       - path: ../Sources/VaultApp
         excludes: [Resources]
       - path: ../Sources/VaultApp/Resources/web

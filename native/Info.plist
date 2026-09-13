@@ -17,7 +17,9 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.5.0</string>
 	<key>CFBundleVersion</key>
-	<string>25</string>
+	<string>26</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_archiivault._tcp</string>

@@ -49,7 +49,7 @@ Already have a model? Import a complete supported MLX model folder from Finder, 
 
 ## Private by design
 
-There is no Vault cloud account, hosted sync service, analytics endpoint, or hosted inference service. Your files stay in the folder you choose. Model downloads contact Hugging Face only when you request them. External links open in your browser. The app blocks remote document media by default.
+There is no Vault cloud account, hosted sync service, analytics endpoint, or hosted inference service. Your files stay in the folder you choose. Model downloads contact Hugging Face only when you request them. External links open in your browser. The app blocks remote document media by default. Read the [privacy policy](docs/PRIVACY.md).
 
 Device sync uses an authenticated, encrypted direct connection on your local network. **Sync is bidirectional**, including edits made by another app in the same folder. Concurrent changes preserve a conflict copy. iOS can suspend background work: keep Vault open on both devices during the first transfer. This is not an internet relay or a background-sync guarantee. [Sync and privacy](docs/SYNC.md).
 
