@@ -20,9 +20,15 @@ test('late folder and pagination replies cannot enter another workspace',async()
  for(const request of old)request.resolve(rows(request.args.offset,200));await more;
  assert.deepEqual(view.rows,[{path:'new.md'}]);assert.equal(view.busy,false);
 });
-test('a newer refresh wins over a slower earlier refresh',async()=>{
+test('sync during a slow folder load cannot starve navigation or flood the bridge',async()=>{
  const waiting=[];let view;
  const browser=new FileBrowser(()=>new Promise(resolve=>waiting.push(resolve)),next=>view=next,assert.fail);
- const first=browser.reset('');const second=browser.refresh();waiting[1]([{path:'latest.md'}]);await second;
- waiting[0]([{path:'stale.md'}]);await first;assert.equal(view.rows[0].path,'latest.md');
+ const first=browser.reset('Research');
+ for(let i=0;i<20;i++)browser.refresh();
+ assert.equal(waiting.length,1,'keep one folder request in flight');
+ waiting.shift()([{path:'Research/Overview.md'}]);await new Promise(setImmediate);
+ assert.equal(view.rows[0].path,'Research/Overview.md','show the first result even while sync is active');
+ assert.equal(waiting.length,1,'coalesce changes into one follow-up');
+ waiting.shift()([{path:'Research/New note.md'}]);await first;
+ assert.equal(view.rows[0].path,'Research/New note.md');assert.equal(view.busy,false);
 });

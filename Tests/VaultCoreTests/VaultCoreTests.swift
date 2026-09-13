@@ -63,6 +63,41 @@ final class VaultCoreTests:XCTestCase {
   try Data("changed".utf8).write(to:url)
   XCTAssertThrowsError(try store.pdfRange("Many pages.pdf",offset:0,length:1,version:version))
  }
+ func testFolderNavigationDoesNotWaitForIndexing() throws {
+  try fixture("Research/Experiments/Observation.md","A new note")
+  try fixture("Research/Overview.md","A new document")
+  try fixture("Research/node_modules/Hidden.md","Excluded")
+  try fixture("Research/.hidden.md","Excluded")
+  try fixture("Research/source.swift","Excluded")
+  try FileManager.default.createSymbolicLink(at:root.appendingPathComponent("Research/Shortcut.md"),withDestinationURL:root.appendingPathComponent("Research/Overview.md"))
+  XCTAssertEqual(try store.list(parent:"Research").compactMap{$0["path"] as? String},["Research/Experiments","Research/Overview.md"])
+  XCTAssertEqual(try store.list(parent:"Research/Experiments").first?["title"] as? String,"Observation")
+  _ = try store.scan()
+  try fixture("Research/Just synced.md","Arrived after the last scan")
+  try FileManager.default.removeItem(at:root.appendingPathComponent("Research/Overview.md"))
+  XCTAssertEqual(try store.list(parent:"Research").compactMap{$0["path"] as? String},["Research/Experiments","Research/Just synced.md"])
+ }
+ func testFolderPagesRemainCompleteWhileIndexIsBusy() throws {
+  for i in 0..<425 {try fixture(String(format:"Notes/Note %03d.md",i),"A note")}
+  try fixture("Notes/Child/Nested.md","Nested")
+  let locked=DispatchSemaphore(value:0),release=DispatchSemaphore(value:0),finished=DispatchSemaphore(value:0)
+  let index=store.db
+  DispatchQueue.global().async {try? index.transaction {locked.signal();release.wait()};finished.signal()}
+  locked.wait()
+  defer {release.signal();finished.wait()}
+  let loaded=expectation(description:"Folder pages load while the index transaction is still open")
+  let browser=store!
+  DispatchQueue.global().async {
+   do {
+    let pages=try [0,200,400].map{try browser.list(parent:"Notes",offset:$0)}
+    XCTAssertEqual(pages.map{$0.filter{$0["directory"] as? Bool != true}.count},[200,200,25])
+    XCTAssertEqual(pages.flatMap{$0}.filter{$0["directory"] as? Bool == true}.count,1)
+    XCTAssertEqual(Set(pages.flatMap{$0}.compactMap{$0["path"] as? String}).count,426)
+   } catch {XCTFail(error.localizedDescription)}
+   loaded.fulfill()
+  }
+  wait(for:[loaded],timeout:3)
+ }
  func testConflictRecoveryAndPortablePaths() throws {
   let doc=try store.save("Research/Note.md",content:"first",revision:nil)
   _ = try store.save("Research/Note.md",content:"second",revision:doc["revision"] as? String)

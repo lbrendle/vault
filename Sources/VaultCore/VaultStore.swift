@@ -165,17 +165,27 @@ public final class VaultStore: @unchecked Sendable {
         for tag in tags {try db.execute("INSERT OR IGNORE INTO tags(source,tag) VALUES(?,?)",[path,tag])}
     }
     public func list(parent:String="",offset:Int=0) throws -> [[String:Any]] {
+        guard offset>=0 else {throw VaultError.message("Invalid folder page")}
         if !parent.isEmpty {_ = try safeURL(parent,requireDocument:false)}
         let url=root.appendingPathComponent(parent)
         let children=try FileManager.default.contentsOfDirectory(at:url,includingPropertiesForKeys:[.isDirectoryKey,.isSymbolicLinkKey],options:[])
-        var folders=[[String:Any]]()
+        // Browsing must work before full-text indexing finishes, including
+        // files just synced or edited by another app. Never take the index lock.
+        var folders=[[String:Any]](),files=[URL]()
         for child in children {
-            let v=try child.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey]); let path=parent.isEmpty ? child.lastPathComponent:parent+"/"+child.lastPathComponent
-            if v.isDirectory==true && v.isSymbolicLink != true && rules.includes(path,directory:true) { folders.append(["path":path,"title":child.lastPathComponent,"directory":true]) }
+            guard let v=try? child.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey]),v.isSymbolicLink != true else {continue}
+            let path=parent.isEmpty ? child.lastPathComponent:parent+"/"+child.lastPathComponent
+            if v.isDirectory==true {
+                if offset==0 && rules.includes(path,directory:true) {folders.append(["path":path,"title":child.lastPathComponent,"directory":true])}
+            } else if rules.includes(path) {files.append(child)}
         }
         folders.sort{($0["title"] as! String).localizedStandardCompare($1["title"] as! String) == .orderedAscending}
-        let files=try db.execute("SELECT path,title,ext,size,modified FROM docs WHERE parent=? ORDER BY title COLLATE NOCASE LIMIT 200 OFFSET ?",[parent,offset])
-        return (offset==0 ? folders:[]) + files
+        files.sort{$0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending}
+        let page:[[String:Any]]=files.dropFirst(offset).prefix(200).map{child in
+            let values=try? child.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey])
+            return ["path":parent.isEmpty ? child.lastPathComponent:parent+"/"+child.lastPathComponent,"title":child.deletingPathExtension().lastPathComponent,"ext":child.pathExtension.lowercased(),"size":values?.fileSize ?? 0,"modified":values?.contentModificationDate?.timeIntervalSince1970 ?? 0]
+        }
+        return folders + page
     }
     public func search(_ query:String, offset:Int=0) throws -> [[String:Any]] {
         if query.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {return try db.execute("SELECT path,title,ext,size,modified FROM docs ORDER BY modified DESC LIMIT 80 OFFSET ?",[offset])}

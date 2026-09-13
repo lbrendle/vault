@@ -21,6 +21,7 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
     let io=DispatchQueue(label:"vault.documents",qos:.userInitiated)
     let indexQueue=DispatchQueue(label:"vault.index",qos:.utility)
     let readQueue=DispatchQueue(label:"vault.reader",qos:.userInitiated,attributes:.concurrent)
+    let folderQueue=DispatchQueue(label:"vault.folders",qos:.userInitiated)
     #if os(macOS)
     var watcher:VaultWatcher?
     #endif
@@ -246,6 +247,8 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         }
         guard let selected=store else {if method=="status" {replyHandler(["connected":false],nil)}else{replyHandler(nil,"Open a vault first")};return}
         if method.hasPrefix("sync") {sync?.call(method,args:args,reply:replyHandler);return}
+        // A folder tap must not wait behind indexing, graph or search work.
+        if method=="list" {folderQueue.async {do {let result=try selected.list(parent:args["path"] as? String ?? "",offset:args["offset"] as? Int ?? 0);DispatchQueue.main.async{replyHandler(result,nil)}}catch{DispatchQueue.main.async{replyHandler(nil,error.localizedDescription)}}};return}
         // Reading bytes must not queue behind search, graph or metadata work.
         if method=="read" {readQueue.async {do {let result=try selected.read(args["path"] as? String ?? "");DispatchQueue.main.async{replyHandler(result,nil)}}catch{DispatchQueue.main.async{replyHandler(nil,error.localizedDescription)}}};return}
         if method=="pdfRange" {readQueue.async {do {let result=try selected.pdfRange(args["path"] as? String ?? "",offset:args["offset"] as? Int ?? 0,length:args["length"] as? Int ?? 65536,version:args["version"] as? String);DispatchQueue.main.async{replyHandler(result,nil)}}catch{DispatchQueue.main.async{replyHandler(nil,error.localizedDescription)}}};return}
@@ -256,7 +259,6 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
                 let path=args["path"] as? String ?? ""
                 switch method {
                 case "status":result=selected.status()
-                case "list":result=try selected.list(parent:path,offset:args["offset"] as? Int ?? 0)
                 case "search":result=try selected.search(args["query"] as? String ?? "",offset:args["offset"] as? Int ?? 0)
                 case "retrieve":let terms=(args["terms"] as? [String] ?? []).prefix(6).filter{!$0.isEmpty}.map{"\""+$0.replacingOccurrences(of:"\"",with:"\"\"")+"\""};result=terms.isEmpty ? []:try selected.db.execute("SELECT d.path,d.title,snippet(search,2,'','',' … ',80) AS snippet FROM search JOIN docs d ON d.id=search.rowid WHERE search MATCH ? ORDER BY bm25(search) LIMIT 5",[terms.joined(separator:" OR ")])
                 case "save":result=try selected.save(path,content:args["content"] as? String ?? "",revision:args["revision"] as? String)
