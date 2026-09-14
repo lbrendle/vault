@@ -44,6 +44,14 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         let hash=VaultStore.fingerprint(Data(Self.vaultIdentity(root).utf8))
         let cache=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Archii Vault/Cache/"+hash)
         let nextStore=try VaultStore(root:root,cache:cache)
+        if LabRuntime.enabled {
+            var rules=nextStore.rules
+            let extensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions)).sorted()
+            if Set(extensions) != Set(rules.documentExtensions) {
+                rules.documentExtensions=extensions
+                try nextStore.saveRules(rules)
+            }
+        }
         localModel?.stop();sync?.stop()
         store=nextStore
         UserDefaults.standard.set(root.path,forKey:"vaultPath")
