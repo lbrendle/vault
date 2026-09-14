@@ -17,6 +17,7 @@ mkdir -p "$(dirname "$VAULT_APP")"
 VAULT_STAGE="$(mktemp -d "$(dirname "$VAULT_APP")/.vault-build.XXXXXX")"
 trap 'rm -rf "$VAULT_STAGE"' EXIT
 ditto "$VAULT_DERIVED/Build/Products/Release/Vault.app" "$VAULT_STAGE/Vault.app"
+find "$VAULT_STAGE/Vault.app/Contents/Resources/lab-python" -type d -name __pycache__ -prune -exec rm -rf {} +
 if [ -n "${VAULT_BUNDLE_ID:-}" ]; then
  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $VAULT_BUNDLE_ID" "$VAULT_STAGE/Vault.app/Contents/Info.plist"
 fi

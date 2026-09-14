@@ -246,6 +246,32 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
             readQueue.async {do {let url=try VaultAsset.url(path:"/pdf/\(folder)/\(name)",root:self.webRoot),data=try Data(contentsOf:url);DispatchQueue.main.async{replyHandler(data.base64EncodedString(),nil)}}catch{DispatchQueue.main.async{replyHandler(nil,error.localizedDescription)}}};return
         }
         guard let selected=store else {if method=="status" {replyHandler(["connected":false],nil)}else{replyHandler(nil,"Open a vault first")};return}
+        if method=="labPreferences" {replyHandler(["enabled":LabRuntime.enabled],nil);return}
+        if method=="labConfigure" {
+            guard !LabRuntime.shared.isRunning else{replyHandler(nil,"Wait for the lab command to finish before changing this setting.");return}
+            let enabled=args["enabled"] as? Bool ?? false
+            UserDefaults.standard.set(enabled,forKey:"labEnabled")
+            replyHandler(["enabled":enabled],nil);return
+        }
+        if method.hasPrefix("lab"),!LabRuntime.enabled {replyHandler(nil,"Enable Lab in Settings first.");return}
+        if method.hasPrefix("lab"),let claimed=args["vaultRoot"] as? String,claimed != selected.root.path{replyHandler(nil,"The lab belongs to a different workspace. Reopen it before saving.");return}
+        #if os(macOS)
+        if method=="labHostStatus" {var value=LabHostRuntime.shared.status();value["address"]=sync?.labAddress() ?? "Pair a vault to start the local listener";replyHandler(value,nil);return}
+        #endif
+        if method.hasPrefix("labRemote") {if let sync{sync.lab(method,args:args,reply:replyHandler)}else{replyHandler(nil,"Pair this vault with your Mac first.")};return}
+        if method.hasPrefix("lab") {
+            LabRuntime.shared.call(method,args:args,root:selected.root){[weak self] value,error in
+                if error==nil,["labSave","labRun","labCreateProject"].contains(method),let self,self.store===selected {
+                    let project=args["project"] as? String ?? "First experiment"
+                    let base=project.hasPrefix("@/") ? String(project.dropFirst(2)):"Labs/"+project
+                    let files=(value as? [String:Any])?["files"] as? [[String:Any]] ?? []
+                    let paths=files.compactMap{($0["path"] as? String).map{base.isEmpty ? $0:base+"/"+$0}}
+                    self.sync?.documentsChanged(paths);self.event("files",["paths":paths])
+                    self.indexQueue.async{_ = try? selected.refreshPaths(paths)}
+                }
+                replyHandler(value,error)
+            };return
+        }
         if method.hasPrefix("sync") {sync?.call(method,args:args,reply:replyHandler);return}
         // A folder tap must not wait behind indexing, graph or search work.
         if method=="list" {folderQueue.async {do {let result=try selected.list(parent:args["path"] as? String ?? "",offset:args["offset"] as? Int ?? 0);DispatchQueue.main.async{replyHandler(result,nil)}}catch{DispatchQueue.main.async{replyHandler(nil,error.localizedDescription)}}};return}

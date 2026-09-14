@@ -2,7 +2,9 @@
 
 [Join the Vault TestFlight beta](https://testflight.apple.com/join/2G2ngjAk).
 
-The latest build is **0.5.0 (27)**, uploaded September 13, 2026 with the folder-navigation fix. The first public beta, build 26, is still awaiting Apple beta review. Build 27 is processed, attached to the public beta group, and ready for submission. Apple currently blocks its review submission while build 26 is pending; it must be submitted again after that review completes. The invitation accepts installations after Apple approves the build. An unavailable invitation during this period does not mean your device or Apple account is misconfigured.
+The Lab release is **0.5.0 (30)**. Check the [release notes](https://github.com/lbrendle/vault/releases/tag/v0.5.0-beta.3) for its upload and processing status. The first public beta, build 26, was still awaiting Apple review when this release was prepared. Apple permits only one build of a version in beta review at a time. An upload or GitHub release does not establish public TestFlight availability; the invitation accepts installations after Apple approves a build.
+
+Lab is optional in **Settings → Lab**. It provides local Python and Jupyter notebook editing/execution, with a file tree, expandable development panels, and installed local models. See [Lab capabilities](LAB.md) for supported libraries and optional Mac assistants.
 
 ## Install
 

@@ -25,3 +25,22 @@ test('chat recovers local document links with spaces and balanced parentheses',(
  assert.doesNotMatch(markdownHTML('[[A "><img src=x>.md]]',{chat:true}),/<img/);
  assert.match(markdownHTML('[[A note',{chat:true}),/\[\[A note/);
 });
+
+test('bare Python filenames and inline code references never become websites',()=>{
+ for(const name of ['baseline.py','model.rs','train.sh']){
+  const html=markdownHTML(name);assert.match(html,/data-wiki=/);assert.doesNotMatch(html,/href="https?:/);
+ }
+ for(const name of ['baseline.py','experiments/model.ipynb','../scripts/train.py']){
+  assert.ok(markdownHTML('`'+name+'`').includes(`data-wiki="${name}"`));
+ }
+ assert.match(markdownHTML('https://baseline.py'),/href="https:\/\/baseline.py"/);
+ assert.match(markdownHTML('[Website](https://example.org/model.ipynb)'),/href="https:\/\/example.org\/model.ipynb"/);
+ assert.doesNotMatch(markdownHTML('`print("model.py")`'),/data-wiki=/);
+});
+test('notebook paths with spaces, escaped characters, parent folders and wiki aliases stay local',()=>{
+ for(const path of ['Notebooks/00 Launch Pad.ipynb','../Notebooks/Modules/V02 - A reproducible Python research laboratory.ipynb','Labs/A study (2026)/baseline.py']){
+  const html=markdownHTML(`[Open](${path})`);assert.ok(html.includes(`data-wiki="${path}"`));assert.doesNotMatch(html,/href="https?:/);
+ }
+ assert.match(markdownHTML('[Open](Notebooks/00%20Launch%20Pad.ipynb)'),/href="Notebooks\/00%20Launch%20Pad.ipynb"/);
+ assert.match(markdownHTML('[[Notebooks/00 Launch Pad.ipynb|Open notebook]]'),/data-wiki="Notebooks\/00 Launch Pad.ipynb"/);
+});

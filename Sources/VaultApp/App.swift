@@ -68,10 +68,11 @@ final class KeyboardWorkspace:UIView {
   keyboardLayoutGuide.followsUndockedKeyboard=false
   keyboardLayoutGuide.usesBottomSafeArea=false
   fullBottom=web.bottomAnchor.constraint(equalTo:bottomAnchor)
-  keyboardBottom=web.bottomAnchor.constraint(equalTo:keyboardLayoutGuide.topAnchor)
+  fullBottom.priority = .defaultHigh
+  keyboardBottom=web.bottomAnchor.constraint(lessThanOrEqualTo:keyboardLayoutGuide.topAnchor)
   NSLayoutConstraint.activate([
    web.topAnchor.constraint(equalTo:topAnchor),web.leadingAnchor.constraint(equalTo:leadingAnchor),
-   web.trailingAnchor.constraint(equalTo:trailingAnchor),fullBottom
+   web.trailingAnchor.constraint(equalTo:trailingAnchor),fullBottom,keyboardBottom
   ])
  }
  required init?(coder:NSCoder){fatalError("init(coder:) is unavailable")}
@@ -79,7 +80,7 @@ final class KeyboardWorkspace:UIView {
   super.layoutSubviews()
   let height=keyboardLayoutGuide.layoutFrame.height
   let open=height>150 // Floating hardware-keyboard controls are not a docked keyboard.
-  if open != lastKeyboardOpen {lastKeyboardOpen=open;fullBottom.isActive = !open;keyboardBottom.isActive=open;setNeedsLayout();web.evaluateJavaScript("document.documentElement.dataset.keyboard='\(open ? "open":"closed")'") {_,_ in}}
+  if open != lastKeyboardOpen {lastKeyboardOpen=open;web.evaluateJavaScript("document.documentElement.dataset.keyboard='\(open ? "open":"closed")'") {_,_ in}}
  }
 }
 struct VaultWebView:UIViewRepresentable {

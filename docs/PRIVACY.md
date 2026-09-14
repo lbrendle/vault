@@ -16,6 +16,12 @@ Installing a starter model downloads files from Hugging Face and its download in
 
 Device sync and paired model access contact devices you pair. External links open in your browser and are governed by the destination's privacy policy. Remote media embedded in documents is blocked by default.
 
+## Optional Lab and coding assistants
+
+Lab runs Python and installed Vault models locally by default. User-written code can itself make network requests. Selecting a paired Mac routes the requested computation through the authenticated vault connection over LAN or Tailscale. Tailscale, when independently installed, operates under its own service and network policies.
+
+Codex and Claude Code are optional Mac CLI integrations. Running one can transmit your prompt and project context to that provider and use your existing account quota. Authentication stays in the CLI’s own local credential storage; Vault does not copy it into documents or sync it. Assistant prompts and results are saved as local project run records and can sync to your paired devices. Reading documents, ordinary local Python execution, and calls to Vault’s installed models do not invoke either provider.
+
 ## Diagnostics and support
 
 Vault stores limited local diagnostics for troubleshooting; it does not automatically send them to the maintainers. Apple may collect platform diagnostics and TestFlight feedback according to your Apple settings and Apple's policies. If you submit feedback or a GitHub issue, the information you choose to include is received by that service and the maintainers. Public GitHub issues are public: do not attach private documents, conversations, pairing codes, or credentials.

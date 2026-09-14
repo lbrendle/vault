@@ -6,13 +6,14 @@
 - Xcode **26.6 or newer**, including the Metal toolchain. Accept Xcode's first-run setup and install the iOS SDK for device builds.
 - Node.js **22 or newer** and npm.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen), for example `brew install xcodegen`.
-- Python 3.10+ only for the optional command-line model downloader and its tests. The app itself uses native MLX and needs no Python.
+- Python 3.12+ to prepare the embedded iOS Lab dependencies and run the build scripts. Mac Lab uses an installed Python environment; model inference uses native MLX independently of Python.
 
-Dependencies are pinned in `web/package-lock.json`, `native/project.yml`, and `native/Package.resolved`. The initial build downloads dependencies; later model inference is local.
+Dependencies are pinned in `web/package-lock.json`, `native/project.yml`, `native/Package.resolved`, and `native/lab-dependencies.lock.json`. The initial build downloads dependencies; later model inference is local.
 
 ```sh
 npm ci --prefix web
 npm run build --prefix web
+python3 scripts/bootstrap-lab.py
 xcodegen generate --spec native/project.yml
 mkdir -p native/ArchiiVault.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
 cp native/Package.resolved native/ArchiiVault.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
@@ -64,3 +65,10 @@ Native smoke tests live in `native/Tests/LocalModelDeviceTests.swift`. They use 
 Review the full public tree, update version/build numbers, run tests and native builds, and scan the staged tree for secrets. Generate dependency notices whenever lockfiles change. Make a tag and publish checksums alongside assets. Never include private vault contents, development-signed mobile IPAs, local preferences, test device exports, or historical private source commits.
 
 For a Mac Starter edition, copy the checksum-verified 2B folder into `Vault.app/Contents/Resources/Models/` **before signing and notarizing**. The app reads bundled models directly without creating a second weights copy. The larger starter remains available in Settings. Models keep their own LICENSE and NOTICE files.
+
+
+## Lab dependencies
+
+Before generating the iOS project, run `python3 scripts/bootstrap-lab.py` with Python 3.12 or newer. It verifies `native/lab-dependencies.lock.json` and prepares the ignored `native/PythonSupport` directory. The existing iPhone/iPad target packages and signs the embedded scientific libraries; the Mac target includes the worker and uses an installed Python environment. See [Lab setup](LAB.md). Native CI performs this preparation before building both existing targets.
+
+The app remains **Vault**, with bundle identifier `com.archii.vault` on Mac and `com.archii.vault.ios` on iPhone/iPad. Lab is a setting in those existing app targets and uses the same repository and release process.

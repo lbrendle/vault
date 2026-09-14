@@ -2,9 +2,13 @@ import Foundation
 import CryptoKit
 
 public struct VaultRules: Codable, Sendable {
+    public static let codeExtensions = ["py","pyi","ipynb","js","jsx","ts","tsx","swift","c","h","cpp","hpp","rs","go","r","jl","sh","bash","zsh","sql","m","mm","metal","html","css","json","jsonl","toml","yaml","yml","csv","tsv","npy","npz"]
     public var excludedDirectories: [String] = ["node_modules","__pycache__","venv","env",".venv","target","dist","build","coverage","DerivedData","Pods","Carthage"]
     public var excludedPaths: [String] = []
-    public var documentExtensions = ["md","markdown","txt","pdf","canvas","base","docx","doc","pptx","xlsx","csv","odt","ods","odp","rtf","epub","png","jpg","jpeg","gif","svg","webp","heic","mp3","m4a","wav","mp4","mov"]
+    public var documentExtensions = Array(Set(["md","markdown","txt","pdf","canvas","base","docx","doc","pptx","xlsx","odt","ods","odp","rtf","epub","png","jpg","jpeg","gif","svg","webp","heic","mp3","m4a","wav","mp4","mov"] + codeExtensions)).sorted()
+    // Missing in older rules files. Migrate once so later explicit extension
+    // exclusions survive reopening a vault, regardless of the Lab toggle.
+    public var codeDiscoveryVersion: Int? = 1
     public init() {}
     public func includes(_ path: String, directory: Bool = false) -> Bool {
         let parts = path.split(separator:"/").map(String.init)
@@ -65,6 +69,12 @@ public final class VaultStore: @unchecked Sendable {
         if let data = try? Data(contentsOf:rulesURL), let saved = try? JSONDecoder().decode(VaultRules.self,from:data) { rules = saved } else { rules = VaultRules() }
         self.cache=cache
         db = try Database(cache.appendingPathComponent("index.sqlite"))
+        if rules.codeDiscoveryVersion == nil {
+            rules.documentExtensions = Array(Set(rules.documentExtensions + VaultRules.codeExtensions)).sorted()
+            rules.codeDiscoveryVersion = 1
+            // Discovery still works when the selected folder cannot persist metadata.
+            try? saveRules(rules)
+        }
     }
     public static func fingerprint(_ data: Data) -> String { SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined() }
     public func safeURL(_ relative: String, requireDocument: Bool = true) throws -> URL {
@@ -143,11 +153,14 @@ public final class VaultStore: @unchecked Sendable {
             guard size <= 64*1024*1024 else { throw VaultError.message("Text larger than 64 MiB requires a streaming reader; kept on disk") }
             body=(try? String(contentsOf:url,encoding:.utf8)) ?? ""
         }
+        if ext=="ipynb",size<=64*1024*1024,let data=try? Data(contentsOf:url),let book=try? JSONSerialization.jsonObject(with:data) as? [String:Any],let cells=book["cells"] as? [[String:Any]] {
+            body=cells.filter{$0["cell_type"] as? String=="markdown"}.compactMap{cell in (cell["source"] as? String) ?? (cell["source"] as? [String])?.joined()}.joined(separator:"\n\n")
+        }
         var frontmatter=""
         if body.hasPrefix("---\n"), let range=body.range(of:"\n---",range:body.index(body.startIndex,offsetBy:4)..<body.endIndex) { frontmatter=String(body[body.index(body.startIndex,offsetBy:4)..<range.lowerBound]) }
         try db.execute("INSERT INTO docs(path,parent,title,ext,size,modified,body,frontmatter,generation) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET parent=excluded.parent,title=excluded.title,ext=excluded.ext,size=excluded.size,modified=excluded.modified,body=excluded.body,frontmatter=excluded.frontmatter,generation=excluded.generation",[path,(path as NSString).deletingLastPathComponent,url.deletingPathExtension().lastPathComponent,ext,size,modified,body,frontmatter,generation])
         try db.execute("DELETE FROM links WHERE source=?",[path]); try db.execute("DELETE FROM tags WHERE source=?",[path])
-        guard ["md","markdown"].contains(ext) else { return }
+        guard ["md","markdown","ipynb"].contains(ext) else { return }
         let text=body as NSString
         let linkRE=try NSRegularExpression(pattern:#"\[\[([^\]\n]+)\]\]|\]\(([^\)\n]+)\)"#)
         var targets=Set<String>()
@@ -282,13 +295,29 @@ public final class VaultStore: @unchecked Sendable {
             let normalized=URL(fileURLWithPath:"/"+candidate).standardizedFileURL.path.dropFirst()
             let found=try db.execute("SELECT path,title,ext FROM docs WHERE path=?",[String(normalized)])
             if !found.isEmpty {return found}
+            // A newly synced or newly enabled code file can be opened before a
+            // large vault finishes indexing. Resolve only inside the existing rules.
+            if VaultRules.codeExtensions.contains((String(normalized) as NSString).pathExtension.lowercased()),
+               let url=try? safeURL(String(normalized)),
+               (try? url.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true {
+                return [["path":String(normalized),"title":url.deletingPathExtension().lastPathComponent,"ext":url.pathExtension.lowercased()]]
+            }
         }
         let name=((clean as NSString).lastPathComponent as NSString).deletingPathExtension
+        let ext=(clean as NSString).pathExtension.lowercased()
+        if !ext.isEmpty{return try db.execute("SELECT path,title,ext FROM docs WHERE title=? COLLATE NOCASE AND ext=? LIMIT 40",[name,ext])}
         return try db.execute("SELECT path,title,ext FROM docs WHERE title=? COLLATE NOCASE LIMIT 40",[name])
     }
     public func backlinks(_ path:String) throws -> [[String:Any]] {
-        let title=((path as NSString).lastPathComponent as NSString).deletingPathExtension
-        return try db.execute("SELECT DISTINCT d.path,d.title,d.ext FROM links l JOIN docs d ON d.path=l.source WHERE l.target IN (?,?,?,?) LIMIT 300",[path,(path as NSString).deletingPathExtension,title,title+".md"])
+        let name=(path as NSString).lastPathComponent,title=(name as NSString).deletingPathExtension
+        let candidates=try db.execute("SELECT DISTINCT source,target FROM links WHERE target IN (?,?,?,?,?) OR target LIKE ? LIMIT 1200",[path,(path as NSString).deletingPathExtension,title,name,title+".md","%/"+name])
+        var found=[[String:Any]](),seen=Set<String>()
+        for candidate in candidates {
+            guard let source=candidate["source"] as? String,let target=candidate["target"] as? String,!seen.contains(source),try resolve(target,from:source).contains(where:{$0["path"] as? String==path}) else{continue}
+            if let row=try db.execute("SELECT path,title,ext FROM docs WHERE path=?",[source]).first{found.append(row);seen.insert(source)}
+            if found.count>=300{break}
+        }
+        return found
     }
     /// Keyset pages keep graph data bounded across the native/web bridge. No
     /// document or link count is truncated; the worker resolves links in batches.

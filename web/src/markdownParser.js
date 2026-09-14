@@ -6,15 +6,26 @@ import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 import {parse, stringify} from 'yaml';
 export const md=new MarkdownIt({html:true,linkify:true,breaks:true,typographer:false}).use(footnote).use(taskLists).use(mark).use(texmath,{engine:katex,delimiters:'dollars',katexOptions:{trust:false,throwOnError:false}});
+// Bare code filenames are local references, even when their extension is a
+// real top-level domain (for example .py, .rs, or .sh). Explicit web URLs stay web URLs.
+const codePath=/\.(?:py|pyi|ipynb|js|jsx|ts|tsx|swift|c|h|cpp|hpp|rs|go|r|jl|sh|bash|zsh|sql|m|mm|metal|html|css|json|jsonl|toml|yaml|yml)(?:#[^\n]*)?$/i;
+md.core.ruler.after('linkify','local_code_links',state=>{
+ for(const block of state.tokens)for(let i=0;i<(block.children||[]).length;i++){
+  const token=block.children[i],text=block.children[i+1];
+  if(token.type==='link_open'&&token.markup==='linkify'&&text?.type==='text'&&codePath.test(text.content)&&! /^(?:[a-z][a-z0-9+.-]*:|\/\/|www\.)/i.test(text.content)){
+   token.attrSet('data-wiki',text.content);token.attrSet('href','#');
+  }
+ }
+});
 md.inline.ruler.before('link','wiki',(state,silent)=>{
  const rest=state.src.slice(state.pos),m=/^(!?)\[\[([^\]\n]+)\]\]/.exec(rest);if(!m)return false;
  if(!silent){const token=state.push('html_inline','',0);const [target,...alias]=m[2].replace(/\\\|/g,'|').split('|');const label=alias.join('|')||(state.env.chat?target.split('/').pop().replace(/\.md(?=#|$)/i,''):target);token.content=`<${m[1]?'span':'a'} class="${m[1]?'embed':'wikilink'}" data-wiki="${md.utils.escapeHtml(target)}" title="${md.utils.escapeHtml(target)}" ${m[1]?'data-embed="true"':'href="#"'}>${md.utils.escapeHtml(label)}</${m[1]?'span':'a'}>`;}
  state.pos+=m[0].length;return true;
 });
-// Models sometimes omit Markdown's angle brackets around document paths with
-// spaces. Recover only local document references, leaving normal Markdown alone.
+// Accept Obsidian-style local document paths containing spaces, including notebooks.
+// Never recover a URL or executable scheme as a local path.
 md.inline.ruler.before('link','chat_document_link',(state,silent)=>{
- if(!state.env.chat||state.src[state.pos]!=='['||state.linkLevel>0)return false;
+ if(state.src[state.pos]!=='['||state.linkLevel>0)return false;
  const labelEnd=md.helpers.parseLinkLabel(state,state.pos,false);
  if(labelEnd<0||state.src[labelEnd+1]!=='(')return false;
  let end=labelEnd+2,depth=1;
@@ -24,7 +35,7 @@ md.inline.ruler.before('link','chat_document_link',(state,silent)=>{
  }
  if(depth!==0)return false;
  const target=state.src.slice(labelEnd+2,end).trim();
- if(!/\s/.test(target)||/[<>"\x00-\x1f]/.test(target)||/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)||! /\.(?:md|markdown|pdf|txt|canvas|base)(?:#[^\n]*)?$/i.test(target))return false;
+ if(!/\s/.test(target)||/[<>"\x00-\x1f]/.test(target)||/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)||! /\.(?:md|markdown|pdf|txt|canvas|base|py|pyi|ipynb|js|jsx|ts|tsx|swift|c|h|cpp|hpp|rs|go|r|jl|sh|bash|zsh|sql|m|mm|metal|html|css|json|jsonl|toml|yaml|yml)(?:#[^\n]*)?$/i.test(target))return false;
  if(!silent){
   const token=state.push('html_inline','',0),label=state.src.slice(state.pos+1,labelEnd);
   token.content=`<a class="wikilink" data-wiki="${md.utils.escapeHtml(target)}" href="#">${md.utils.escapeHtml(label)}</a>`;
@@ -34,6 +45,10 @@ md.inline.ruler.before('link','chat_document_link',(state,silent)=>{
 const inlineCode=md.renderer.rules.code_inline;
 md.renderer.rules.code_inline=(tokens,i,options,env,self)=>{
  const text=tokens[i].content;
+ if(codePath.test(text)&&!/[\s:="'<>|(){}]/.test(text)){
+  const target=md.utils.escapeHtml(text);
+  return `<a class="wikilink code-file-link" data-wiki="${target}" href="#"><code>${target}</code></a>`;
+ }
  if(env.chat&&(/^\[\[[^\]\n]+\]\]$/.test(text)||/^\[[^\]\n]+\]\([^\n]+\)$/.test(text))){
   const rendered=md.renderInline(text,env);
   if(/^<a\b/.test(rendered)&&rendered.endsWith('</a>'))return rendered;
