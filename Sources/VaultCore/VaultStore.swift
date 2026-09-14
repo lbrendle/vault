@@ -5,7 +5,10 @@ public struct VaultRules: Codable, Sendable {
     public static let codeExtensions = ["py","pyi","ipynb","js","jsx","ts","tsx","swift","c","h","cpp","hpp","rs","go","r","jl","sh","bash","zsh","sql","m","mm","metal","html","css","json","jsonl","toml","yaml","yml","csv","tsv","npy","npz"]
     public var excludedDirectories: [String] = ["node_modules","__pycache__","venv","env",".venv","target","dist","build","coverage","DerivedData","Pods","Carthage"]
     public var excludedPaths: [String] = []
-    public var documentExtensions = ["md","markdown","txt","py","ipynb","json","jsonl","toml","yaml","yml","csv","tsv","npz","npy","pdf","canvas","base","docx","doc","pptx","xlsx","odt","ods","odp","rtf","epub","png","jpg","jpeg","gif","svg","webp","heic","mp3","m4a","wav","mp4","mov"]
+    public var documentExtensions = Array(Set(["md","markdown","txt","pdf","canvas","base","docx","doc","pptx","xlsx","odt","ods","odp","rtf","epub","png","jpg","jpeg","gif","svg","webp","heic","mp3","m4a","wav","mp4","mov"] + codeExtensions)).sorted()
+    // Missing in older rules files. Migrate once so later explicit extension
+    // exclusions survive reopening a vault, regardless of the Lab toggle.
+    public var codeDiscoveryVersion: Int? = 1
     public init() {}
     public func includes(_ path: String, directory: Bool = false) -> Bool {
         let parts = path.split(separator:"/").map(String.init)
@@ -66,6 +69,12 @@ public final class VaultStore: @unchecked Sendable {
         if let data = try? Data(contentsOf:rulesURL), let saved = try? JSONDecoder().decode(VaultRules.self,from:data) { rules = saved } else { rules = VaultRules() }
         self.cache=cache
         db = try Database(cache.appendingPathComponent("index.sqlite"))
+        if rules.codeDiscoveryVersion == nil {
+            rules.documentExtensions = Array(Set(rules.documentExtensions + VaultRules.codeExtensions)).sorted()
+            rules.codeDiscoveryVersion = 1
+            // Discovery still works when the selected folder cannot persist metadata.
+            try? saveRules(rules)
+        }
     }
     public static func fingerprint(_ data: Data) -> String { SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined() }
     public func safeURL(_ relative: String, requireDocument: Bool = true) throws -> URL {
@@ -286,6 +295,13 @@ public final class VaultStore: @unchecked Sendable {
             let normalized=URL(fileURLWithPath:"/"+candidate).standardizedFileURL.path.dropFirst()
             let found=try db.execute("SELECT path,title,ext FROM docs WHERE path=?",[String(normalized)])
             if !found.isEmpty {return found}
+            // A newly synced or newly enabled code file can be opened before a
+            // large vault finishes indexing. Resolve only inside the existing rules.
+            if VaultRules.codeExtensions.contains((String(normalized) as NSString).pathExtension.lowercased()),
+               let url=try? safeURL(String(normalized)),
+               (try? url.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true {
+                return [["path":String(normalized),"title":url.deletingPathExtension().lastPathComponent,"ext":url.pathExtension.lowercased()]]
+            }
         }
         let name=((clean as NSString).lastPathComponent as NSString).deletingPathExtension
         let ext=(clean as NSString).pathExtension.lowercased()

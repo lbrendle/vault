@@ -1,5 +1,5 @@
 """Local tools for inspectable experiments in Vault."""
-from . import metal
+__all__ = ["metal", "models", "agents", "display"]
 
 
 def display(value):

@@ -2,7 +2,7 @@
 #import <Python/Python.h>
 #include <stdatomic.h>
 static atomic_bool cancelled = false;
-static VaultGPUCallback gpuCallback;
+static VaultGPUCallback gpuCallback,modelCallback;
 static PyObject *dispatcher;
 static PyObject *isCancelled(PyObject *self, PyObject *args) { return PyBool_FromLong(atomic_load(&cancelled)); }
 static PyObject *gpuRequest(PyObject *self, PyObject *args) {
@@ -13,10 +13,22 @@ static PyObject *gpuRequest(PyObject *self, PyObject *args) {
     if(!answer) {PyErr_SetString(PyExc_RuntimeError,"GPU request failed");return NULL;}
     PyObject *result=PyUnicode_FromString(answer);free(answer);return result;
 }
-static PyMethodDef nativeMethods[]={{"cancelled",isCancelled,METH_NOARGS,"Return cancellation state."},{"gpu",gpuRequest,METH_VARARGS,"Execute an MLX graph on this device."},{NULL,NULL,0,NULL}};
+static PyObject *modelRequest(PyObject *self, PyObject *args) {
+    const char *request;
+    if (!PyArg_ParseTuple(args, "s", &request)) return NULL;
+    if (!modelCallback) {PyErr_SetString(PyExc_RuntimeError,"Vault local models are unavailable");return NULL;}
+    char *answer;
+    Py_BEGIN_ALLOW_THREADS
+    answer=modelCallback(request);
+    Py_END_ALLOW_THREADS
+    if(!answer) {PyErr_SetString(PyExc_RuntimeError,"Local model request failed");return NULL;}
+    PyObject *result=PyUnicode_FromString(answer);free(answer);return result;
+}
+static PyMethodDef nativeMethods[]={{"model",modelRequest,METH_VARARGS,"Use installed Vault models on this device."},{"cancelled",isCancelled,METH_NOARGS,"Return cancellation state."},{"gpu",gpuRequest,METH_VARARGS,"Execute an MLX graph on this device."},{NULL,NULL,0,NULL}};
 static struct PyModuleDef nativeModule={PyModuleDef_HEAD_INIT,"_vault_native",NULL,-1,nativeMethods};
 static PyObject *PyInit_vault_native(void){return PyModule_Create(&nativeModule);}
 @implementation LabPython
++(void)setModelCallback:(VaultGPUCallback)callback {modelCallback=callback;}
 +(void)setGPUCallback:(VaultGPUCallback)callback {gpuCallback=callback;}
 +(NSString *)initializeAt:(NSString *)bundle error:(NSString **)error {
     if(dispatcher)return @"ready";

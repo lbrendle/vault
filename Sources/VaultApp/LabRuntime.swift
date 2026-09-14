@@ -20,13 +20,14 @@ final class LabRuntime {
     }
     func call(_ method:String,args:[String:Any],root:URL,reply:@escaping(Any?,String?)->Void) {
         #if os(iOS)
-        if method=="labCancel" {LabPython.cancel();reply(true,nil);return}
+        if method=="labCancel" {LabPython.cancel();LabModel.cancel();reply(true,nil);return}
         lock.lock()
         if running {lock.unlock();reply(nil,"An experiment is running. Stop it or wait for it to finish.");return}
         running=true;lock.unlock()
         queue.async {
             do {
                 if !self.initialized {
+                    LabPython.setModelCallback { input in strdup(LabModel.dispatch(String(cString:input))) }
                     LabPython.setGPUCallback { input in
                         let result=LabGPU.dispatch(String(cString:input))
                         return strdup(result)

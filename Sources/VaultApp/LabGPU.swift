@@ -10,6 +10,8 @@ enum LabGPU {
             guard let r=try JSONSerialization.jsonObject(with:Data(request.utf8)) as? [String:Any] else{throw problem("Invalid GPU request")}
             guard let device=MTLCreateSystemDefaultDevice() else{throw problem("No Metal device is available")}
             if r["method"] as? String == "info" {return encode(["backend":"MLX Metal","device":device.name,"local":true])}
+            guard LocalModel.claim() else{throw problem("Vault is using the GPU for a local model. Wait for it to finish or stop it first.")}
+            defer{LocalModel.release()}
             if r["method"] as? String == "kernel" {return encode(try kernel(r,device:device))}
             guard let nodes=r["nodes"] as? [[String:Any]],nodes.count<=512,!nodes.isEmpty,
                   let output=r["output"] as? Int,output>=0,output<nodes.count else{throw problem("Invalid or oversized tensor graph")}

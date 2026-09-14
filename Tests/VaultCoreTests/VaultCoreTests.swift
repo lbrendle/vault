@@ -1,6 +1,35 @@
 import XCTest
 @testable import VaultCore
 final class VaultCoreTests:XCTestCase {
+ func testCodeDiscoveryInAnySelectedFolderBeforeIndexing() throws {
+  try fixture("Existing folder/baseline.py","print(42)")
+  try fixture("Existing folder/Experiment.IPYNB","{\"nbformat\":4,\"cells\":[]}")
+  try fixture("Existing folder/Guide.md","[[baseline.py]]")
+  XCTAssertEqual(Set(try store.list(parent:"Existing folder").compactMap{$0["path"] as? String}),Set(["Existing folder/baseline.py","Existing folder/Experiment.IPYNB","Existing folder/Guide.md"]))
+  XCTAssertEqual(try store.resolve("baseline.py",from:"Existing folder/Guide.md").first?["ext"] as? String,"py")
+  XCTAssertEqual(try store.resolve("Experiment.IPYNB",from:"Existing folder/Guide.md").first?["ext"] as? String,"ipynb")
+ }
+ func testLegacyRulesGainCodeDiscoveryOnceAndPreserveExclusions() throws {
+  try fixture(".archii-vault/rules.json","{\"documentExtensions\":[\"md\"],\"excludedDirectories\":[\"private\"],\"excludedPaths\":[\"Research/Skip\"]}")
+  try fixture("Research/baseline.py","print(42)")
+  try fixture("Research/Experiment.ipynb","{\"cells\":[]}")
+  try fixture("Research/Guide.md","[[baseline.py]]")
+  try fixture("Research/private/secret.py","hidden")
+  try fixture("Research/Skip/secret.ipynb","{}")
+  store=try VaultStore(root:root,cache:temp.appendingPathComponent("migrated-cache"))
+  XCTAssertEqual(store.rules.excludedDirectories,["private"])
+  XCTAssertEqual(store.rules.excludedPaths,["Research/Skip"])
+  XCTAssertEqual(Set(try store.list(parent:"Research").compactMap{$0["path"] as? String}),Set(["Research/baseline.py","Research/Experiment.ipynb","Research/Guide.md"]))
+  XCTAssertTrue(try store.resolve("private/secret.py",from:"Research/Guide.md").isEmpty)
+  XCTAssertEqual(try store.scan()["visited"] as? Int,3)
+  XCTAssertEqual(try store.resolve("baseline.py",from:"Research/Guide.md").first?["path"] as? String,"Research/baseline.py")
+  let persisted=try JSONDecoder().decode(VaultRules.self,from:Data(contentsOf:root.appendingPathComponent(".archii-vault/rules.json")))
+  XCTAssertEqual(persisted.codeDiscoveryVersion,1)
+  var custom=persisted;custom.documentExtensions.removeAll{$0=="py"};try store.saveRules(custom)
+  store=try VaultStore(root:root,cache:temp.appendingPathComponent("reopened-cache"))
+  XCTAssertFalse(store.rules.includes("Research/baseline.py"))
+  XCTAssertTrue(store.rules.includes("Research/Experiment.ipynb"))
+ }
  func testCodeLinksKeepTheirExtensionAndRelativeFolder() throws {
   var rules=store.rules;rules.documentExtensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions));try store.saveRules(rules)
   try fixture("Research/Guide.md","[[baseline.py]]\n[Notebook](Starter%20Lab/experiment.ipynb)\n")
@@ -17,6 +46,18 @@ final class VaultCoreTests:XCTestCase {
   try fixture("Research/Starter Lab/experiment.ipynb","{\"nbformat\":4,\"cells\":[{\"cell_type\":\"markdown\",\"source\":[\"[Guide](../Guide.md)\"]}]}")
   try store.refreshPaths(["Research/Starter Lab/experiment.ipynb"])
   XCTAssertEqual(try store.backlinks("Research/Guide.md").first?["path"] as? String,"Research/Starter Lab/experiment.ipynb")
+ }
+ func testNewCodeFilesResolveBeforeIndexingWithoutEscapingRules() throws {
+  var rules=store.rules;rules.documentExtensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions));try store.saveRules(rules)
+  try fixture("Curriculum/Starter Lab/baseline.py","print(42)")
+  try fixture("Curriculum/Notebooks/00 Launch Pad.ipynb","{\"cells\":[]}")
+  XCTAssertEqual(try store.resolve("Starter%20Lab/baseline.py",from:"Curriculum/Guide.md").first?["ext"] as? String,"py")
+  XCTAssertEqual(try store.resolve("../Notebooks/00%20Launch%20Pad.ipynb",from:"Curriculum/Modules/V02.md").first?["ext"] as? String,"ipynb")
+  XCTAssertTrue(try store.resolve("base.py",from:"Curriculum/Guide.md").isEmpty)
+  try fixture("node_modules/secret.py","secret")
+  XCTAssertTrue(try store.resolve("node_modules/secret.py").isEmpty)
+  try FileManager.default.createSymbolicLink(at:root.appendingPathComponent("escape.py"),withDestinationURL:root.appendingPathComponent("Curriculum/Starter Lab/baseline.py"))
+  XCTAssertTrue(try store.resolve("escape.py").isEmpty)
  }
  func testBundleAssetsNormalizeTheRootBeforeContainmentCheck() throws {
   let base=URL(fileURLWithPath:"/private/var/containers/Bundle/../Bundle/Application/test/ArchiiVault.app/web")
@@ -85,7 +126,7 @@ final class VaultCoreTests:XCTestCase {
   try fixture("Research/Overview.md","A new document")
   try fixture("Research/node_modules/Hidden.md","Excluded")
   try fixture("Research/.hidden.md","Excluded")
-  try fixture("Research/source.swift","Excluded")
+  try fixture("Research/source.unknown","Excluded")
   try FileManager.default.createSymbolicLink(at:root.appendingPathComponent("Research/Shortcut.md"),withDestinationURL:root.appendingPathComponent("Research/Overview.md"))
   XCTAssertEqual(try store.list(parent:"Research").compactMap{$0["path"] as? String},["Research/Experiments","Research/Overview.md"])
   XCTAssertEqual(try store.list(parent:"Research/Experiments").first?["title"] as? String,"Observation")

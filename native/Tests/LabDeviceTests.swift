@@ -65,6 +65,13 @@ final class LabDeviceTests:XCTestCase {
         try data.write(to:root.appendingPathComponent("verification.json"))
         let attachment=XCTAttachment(data:data,uniformTypeIdentifier:"public.json");attachment.name="Local iPad lab verification";attachment.lifetime = .keepAlways;add(attachment)
     }
+    func testNotebookUsesInstalledLocalModel()async throws {
+        _ = try await call("labProjects")
+        _ = try await run("from vaultlab import models\ninstalled = models.list()\nprint('Installed local models:', len(installed))")
+        guard !(ModelLibrary.catalog()["models"] as? [[String:Any]] ?? []).isEmpty else{throw XCTSkip("Install a Vault model to exercise native notebook generation.")}
+        _ = try await run("reply = models.chat([{'role':'user','content':'Say hello in one short sentence.'}], max_tokens=64, temperature=0.0, timeout=120)\nassert reply['local'] and reply['offline']\nassert reply['text'].strip()\nprint(reply)",timeout:150)
+        _ = try await run("from vaultlab import metal\nassert metal.info()['local']\nprint('GPU is available after model unload')")
+    }
     func testPairedMacOverLAN()async throws {
         guard let pairingCode=ProcessInfo.processInfo.environment["VAULT_LAB_QA_CODE"] else{throw XCTSkip("Run alongside the isolated Mac LAN fixture")}
         _ = try await call("labProjects")
@@ -92,6 +99,14 @@ final class LabDeviceTests:XCTestCase {
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
         let script=folder.appendingPathComponent("baseline.py")
         try "answer = 6 * 7\nprint(answer)\n".write(to:script,atomically:true,encoding:.utf8)
+        try "{\"nbformat\":4,\"cells\":[]}".write(to:folder.appendingPathComponent("Experiment.ipynb"),atomically:true,encoding:.utf8)
+        let metadata=root.appendingPathComponent(".archii-vault")
+        try FileManager.default.createDirectory(at:metadata,withIntermediateDirectories:true)
+        try "{\"documentExtensions\":[\"md\"],\"excludedDirectories\":[\"private\"],\"excludedPaths\":[]}".write(to:metadata.appendingPathComponent("rules.json"),atomically:true,encoding:.utf8)
+        let store=try VaultStore(root:root,cache:root.appendingPathComponent(".cache"))
+        XCTAssertEqual(Set(try store.list(parent:"Curriculum/Starter Lab").compactMap{$0["ext"] as? String}),Set(["py","ipynb"]))
+        XCTAssertEqual(try store.resolve("baseline.py",from:"Curriculum/Starter Lab/Guide.md").first?["ext"] as? String,"py")
+        XCTAssertEqual(try store.resolve("Experiment.ipynb",from:"Curriculum/Starter Lab/Guide.md").first?["ext"] as? String,"ipynb")
         let project="@/Curriculum/Starter Lab"
         let file=try await call("labRead",["project":project,"path":"baseline.py"])
         let result=try await call("labRun",["project":project,"path":"baseline.py","code":file["content"]!])
@@ -104,8 +119,10 @@ final class LabDeviceTests:XCTestCase {
     }
     func testInstallPurePythonPackage()async throws {
         _ = try await call("labProjects")
-        _ = try await run("pip install more-itertools==10.5.0",mode:"console")
+        _ = try await run("%pip install more-itertools==10.5.0 ipython",timeout:300)
         _ = try await run("from more_itertools import chunked\nassert list(chunked(range(5), 2)) == [[0,1],[2,3],[4]]\nprint('Installed and imported a pure Python package on iPad')")
+        _ = try await run("import IPython\nfrom IPython.display import HTML\nassert IPython.version_info >= (9, 0)\nassert HTML('<b>Vault</b>').data == '<b>Vault</b>'\nprint('IPython installed and imported on this device')")
+        _ = try await run("!pip install ipython\nimport IPython\nprint(IPython.__version__)")
     }
     func testFilesSessionsAndInvalidInputs()async throws {
         _ = try await call("labProjects")

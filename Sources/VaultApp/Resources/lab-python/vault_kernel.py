@@ -62,11 +62,13 @@ def notebook(cells):
 
 def seed_project(root, name='First experiment'):
     project = safe(root, name)
-    if project.exists(): return project
-    project.mkdir(parents=True)
+    project.mkdir(parents=True, exist_ok=True)
     templates = pathlib.Path(__file__).parent/'templates'
     for p in templates.iterdir():
-        if p.is_file(): (project/p.name).write_bytes(p.read_bytes())
+        # A partially synced starter folder must not suppress bundled examples.
+        # Never replace a user's existing notebook, outputs, or code.
+        if p.is_file() and not (project/p.name).exists():
+            (project/p.name).write_bytes(p.read_bytes())
     return project
 
 def project_directory(vault, name):
@@ -136,7 +138,16 @@ def run_code(project, code, filename, timeout=120, mode='cell', execution='embed
         importlib.invalidate_caches()
         with contextlib.redirect_stdout(stdout),contextlib.redirect_stderr(stderr):
             sys.settrace(trace)
-            if mode=='console':
+            if mode=='assistant':
+                request=json.loads(code)
+                if request.get('provider')=='local':
+                    from vaultlab import models
+                    messages=request.get('messages') or [{'role':'user','content':request['prompt']}]
+                    print(models.chat(messages,model=request.get('model'),max_tokens=512)['text'])
+                else:
+                    from vaultlab import agents
+                    print(agents.run(request['provider'],request['prompt'],edit=request.get('edit',False),timeout=timeout))
+            elif mode=='console':
                 command=shlex.split(code)
                 if not command: pass
                 elif command[0] in ('python','python3','run'):
@@ -148,19 +159,18 @@ def run_code(project, code, filename, timeout=120, mode='cell', execution='embed
                     rc=pytest.main(command[1:] or ['-q'])
                     if int(rc):raise RuntimeError(f'pytest exited with status {int(rc)}')
                 elif command[0]=='pip':
-                    if len(command)<3 or command[1]!='install' or any(x.startswith('-') for x in command[2:]):
-                        raise ValueError('Use pip install package-name. Only pure Python wheels can be added on-device.')
-                    from pip._internal.cli.main import main
-                    site=project/'.vaultlab'/'packages'
-                    rc=main(['install','--target',str(site),'--only-binary=:all:','--platform','any','--implementation','py','--abi','none','--disable-pip-version-check','--no-compile',*command[2:]])
-                    if rc:raise RuntimeError('Package installation failed; native extensions must be bundled for iPad')
+                    from vault_packages import install
+                    install(project,command[1:])
+                elif command[0] in ('codex','claude','cc'):
+                    from vaultlab import agents
+                    print(agents.run('claude' if command[0]=='cc' else command[0], ' '.join(command[1:]), timeout=timeout))
                 elif command[0]=='git': git_command(project,command[1:])
                 elif command[0]=='pwd': print(project)
                 elif command[0]=='ls':
                     p=safe(project,command[1] if len(command)>1 else '')
                     print('\n'.join(x.name+('/' if x.is_dir() else '') for x in sorted(p.iterdir()) if not x.name.startswith('.')))
                 elif command[0]=='cat': print(safe(project,command[1]).read_text(encoding='utf-8'))
-                elif command[0]=='help':print('python file.py [args] · pytest -q · pip install package · git init/status/add/commit/log/diff · ls · pwd · cat file\nThis console runs embedded tools on this device; it is not a Unix process shell.')
+                elif command[0]=='help':print('python file.py [args] · pytest -q · pip install package · git init/status/add/commit/log/diff · ls · pwd · cat file\nLocal models: from vaultlab import models; models.generate("Explain this result")\nMac assistants: codex "Explain baseline.py" or claude "Explain baseline.py" (Mac target and login required).\nThis console runs embedded tools on this device; it is not a Unix process shell.')
                 else: execute_cell(code,filename,ns)
             else: execute_cell(code,filename,ns)
             capture_figures()
@@ -193,6 +203,9 @@ def run_code(project, code, filename, timeout=120, mode='cell', execution='embed
     return {**record,'variables':variables(ns),'files':listing(project)}
 
 def execute_cell(code,filename,ns):
+    from vault_packages import install, transform_cell
+    ns['_vault_pip_install']=lambda arguments:install(pathlib.Path.cwd(),arguments)
+    code=transform_cell(code)
     tree=ast.parse(code,filename=filename,mode='exec')
     if tree.body and isinstance(tree.body[-1],ast.Expr):
         last=tree.body.pop()
@@ -216,7 +229,7 @@ def git_command(project,args):
         porcelain.add(str(project),paths=paths);print('Changes staged')
     elif command=='commit':
         if len(args)<3 or args[1]!='-m':raise ValueError('Use git commit -m "message"')
-        ident=b'Vault Lab <local@vault>'
+        ident=b'Vault <local@vault>'
         print(porcelain.commit(str(project),message=args[2].encode(),author=ident,committer=ident).decode())
     elif command=='log':porcelain.log(str(project),outstream=sys.stdout,max_entries=8)
     elif command=='diff':
@@ -265,7 +278,9 @@ def dispatch(request):
         if p.exists() and (revision is None or digest(p.read_text(encoding='utf-8'))!=revision):raise ValueError('This file changed since you opened it. Reopen it or save a new copy.')
         atomic(p,content);return {'revision':digest(content),'files':listing(project)}
     if method=='labRun':
-        return run_code(project,args.get('code',''),args.get('path','<notebook>'),min(max(int(args.get('timeout',120)),1),600),args.get('mode','cell'),args.get('execution','mac-local' if request.get('platform')=='mac' else 'embedded-local'))
+        from vault_packages import default_timeout
+        code, mode = args.get('code',''), args.get('mode','cell')
+        return run_code(project,code,args.get('path','<notebook>'),min(max(int(args.get('timeout',default_timeout(code,mode))),1),600),mode,args.get('execution','mac-local' if request.get('platform')=='mac' else 'embedded-local'))
     if method=='labReset':
         _sessions.pop(str(project),None)
         _project_modules.pop(str(project),None)

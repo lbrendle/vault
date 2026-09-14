@@ -35,8 +35,12 @@ final class LabHostRuntime {
                 try input.write(contentsOf:data+Data([10]))
                 while true {
                     let line=try self.readLine(output)
-                    let replyPrefix=Data("VAULT_LAB_REPLY ".utf8),gpuPrefix=Data("VAULT_LAB_GPU ".utf8)
+                    let replyPrefix=Data("VAULT_LAB_REPLY ".utf8),gpuPrefix=Data("VAULT_LAB_GPU ".utf8),modelPrefix=Data("VAULT_LAB_MODEL ".utf8)
                     if line.starts(with:replyPrefix){value=try JSONSerialization.jsonObject(with:line.dropFirst(replyPrefix.count));break}
+                    if line.starts(with:modelPrefix){
+                        let result=LabModel.dispatch(String(decoding:line.dropFirst(modelPrefix.count),as:UTF8.self))
+                        try input.write(contentsOf:Data((result+"\n").utf8))
+                    }
                     if line.starts(with:gpuPrefix){
                         let result=LabGPU.dispatch(String(decoding:line.dropFirst(gpuPrefix.count),as:UTF8.self))
                         try input.write(contentsOf:Data((result+"\n").utf8))
@@ -68,6 +72,6 @@ final class LabHostRuntime {
         p.standardInput=stdin;p.standardOutput=stdout;p.standardError=FileHandle.nullDevice
         try p.run();buffered.removeAll();process=p;input=stdin.fileHandleForWriting;output=stdout.fileHandleForReading
     }
-    private func cancel(){lock.lock();let p=process,i=input,o=output;process=nil;input=nil;output=nil;lock.unlock();if p?.isRunning==true{p?.terminate()};try? i?.close();try? o?.close()}
+    private func cancel(){LabModel.cancel();lock.lock();let p=process,i=input,o=output;process=nil;input=nil;output=nil;lock.unlock();if p?.isRunning==true{p?.terminate()};try? i?.close();try? o?.close()}
 }
 #endif

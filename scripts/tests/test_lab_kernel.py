@@ -50,3 +50,14 @@ class LabFilesTest(unittest.TestCase):
             (self.root / 'Labs').symlink_to(external, target_is_directory=True)
             with self.assertRaises(ValueError):
                 kernel.dispatch({'method': 'labProjects', 'root': str(self.root), 'args': {}})
+
+    def test_partial_starter_preserves_edits_and_adds_bundled_notebooks(self):
+        labs=self.root/'Labs'; first=labs/'First experiment'; first.mkdir(parents=True)
+        (first/'baseline.py').write_text('my existing code')
+        kernel.seed_project(labs)
+        self.assertEqual((first/'baseline.py').read_text(),'my existing code')
+        notebooks=list(first.glob('*.ipynb'))
+        self.assertGreaterEqual(len(notebooks),4)
+        notebooks[0].write_text('my notebook output')
+        kernel.seed_project(labs)
+        self.assertEqual(notebooks[0].read_text(),'my notebook output')

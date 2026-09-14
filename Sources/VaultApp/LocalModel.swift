@@ -37,8 +37,8 @@ final class LocalModel: @unchecked Sendable {
     }
     private static let admission=NSLock()
     private static var occupied=false
-    private static func claim()->Bool {admission.lock();defer{admission.unlock()};if occupied{return false};occupied=true;return true}
-    private static func release(){admission.lock();occupied=false;admission.unlock()}
+    static func claim()->Bool {admission.lock();defer{admission.unlock()};if occupied{return false};occupied=true;return true}
+    static func release(){admission.lock();occupied=false;admission.unlock()}
     static var availableMemory:UInt64 {
         #if os(iOS)
         return UInt64(os_proc_available_memory())

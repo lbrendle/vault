@@ -44,14 +44,6 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         let hash=VaultStore.fingerprint(Data(Self.vaultIdentity(root).utf8))
         let cache=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Archii Vault/Cache/"+hash)
         let nextStore=try VaultStore(root:root,cache:cache)
-        if LabRuntime.enabled {
-            var rules=nextStore.rules
-            let extensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions)).sorted()
-            if Set(extensions) != Set(rules.documentExtensions) {
-                rules.documentExtensions=extensions
-                try nextStore.saveRules(rules)
-            }
-        }
         localModel?.stop();sync?.stop()
         store=nextStore
         UserDefaults.standard.set(root.path,forKey:"vaultPath")
@@ -258,12 +250,6 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         if method=="labConfigure" {
             guard !LabRuntime.shared.isRunning else{replyHandler(nil,"Wait for the lab command to finish before changing this setting.");return}
             let enabled=args["enabled"] as? Bool ?? false
-            if enabled {
-                var rules=selected.rules
-                rules.documentExtensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions)).sorted()
-                do{try selected.saveRules(rules)}catch{replyHandler(nil,error.localizedDescription);return}
-                indexQueue.async{_ = try? selected.scan()}
-            }
             UserDefaults.standard.set(enabled,forKey:"labEnabled")
             replyHandler(["enabled":enabled],nil);return
         }

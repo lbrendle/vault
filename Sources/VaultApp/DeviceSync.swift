@@ -17,6 +17,7 @@ final class DeviceSync: @unchecked Sendable {
     private let changed:([String])->Void
     private var modelChannel:PeerChannel?
     private var labChannel:PeerChannel?
+    private var directPeer:(id:String,routes:[NWEndpoint])?
     private var labJob:String?
     private var listener:NWListener?,browser:NWBrowser?,timer:DispatchSourceTimer?
     private var channels=[PeerChannel](),endpoints=[String:[NWEndpoint]](),busy=Set<String>()
@@ -74,11 +75,15 @@ final class DeviceSync: @unchecked Sendable {
                         for interface in interfaces.prefix(3){routes.append(.service(name:name,type:type,domain:domain,interface:interface))}
                     }
                     routes.append(result.endpoint);found[id]=routes}}
+                if let direct=self.directPeer{found[direct.id]=direct.routes}
                 self.endpoints=found;self.publish();self.synchronizeAll()
             }
             browser.stateUpdateHandler={[weak self] state in switch state {case .failed(let error),.waiting(let error):self?.problem="Local network: "+error.localizedDescription;self?.publish();default:break}}
             self.browser=browser;browser.start(queue:queue)
             let timer=DispatchSource.makeTimerSource(queue:queue);timer.schedule(deadline:.now()+3,repeating:15);timer.setEventHandler{[weak self] in self?.synchronizeAll();self?.publish()};timer.resume();self.timer=timer
+            if let address=UserDefaults.standard.string(forKey:"labPeerAddress."+keyAccount),!address.isEmpty {
+                lab("labRemoteStatus",args:["address":address],reply:{_,_ in})
+            }
             phase="Waiting for paired devices";problem="";publish()
         }catch{problem=error.localizedDescription;publish()}
     }
@@ -182,7 +187,7 @@ final class DeviceSync: @unchecked Sendable {
     #endif
     func lab(_ method:String,args:[String:Any],reply:@escaping(Any?,String?)->Void){queue.async{
         if method=="labRemoteRun",self.labChannel != nil {DispatchQueue.main.async{reply(nil,"The paired Mac is already running a lab command.")};return}
-        guard let encoded=self.config?["secret"],let secret=Data(base64Encoded:encoded) else{DispatchQueue.main.async{reply(nil,"Pair Vault Lab with your Mac in Device sync, and keep both apps open on the same local network.")};return}
+        guard let encoded=self.config?["secret"],let secret=Data(base64Encoded:encoded) else{DispatchQueue.main.async{reply(nil,"Pair Vault with your Mac in Device sync, and keep both apps open on the same local network or connected through Tailscale.")};return}
         var endpoints=Array(self.endpoints.values)
         if let address=args["address"] as? String,!address.isEmpty {
             do{endpoints=[try Self.directRoute(address)]}catch{DispatchQueue.main.async{reply(nil,error.localizedDescription)};return}
@@ -192,7 +197,17 @@ final class DeviceSync: @unchecked Sendable {
             do {
                 for endpoint in endpoints {
                     var candidate:PeerChannel?
-                    do {let c=try await PeerChannel.connect(to:endpoint,secret:secret);candidate=c;let hello=try await c.request("hello");if hello["model"] as? Bool==true{channel=c;break}}catch{}
+                    do {let c=try await PeerChannel.connect(to:endpoint,secret:secret);candidate=c;let hello=try await c.request("hello");if hello["model"] as? Bool==true{
+                        channel=c
+                        if let address=args["address"] as? String,!address.isEmpty,let id=hello["device"] as? String,id != self.device {
+                            await withCheckedContinuation{done in self.queue.async{
+                                self.directPeer=(id,endpoint);self.endpoints[id]=endpoint
+                                UserDefaults.standard.set(address,forKey:"labPeerAddress."+self.keyAccount)
+                                self.synchronizeAll();self.publish();done.resume()
+                            }}
+                        }
+                        break
+                    }}catch{}
                     candidate?.close()
                 }
                 guard let c=channel else{throw VaultError.message("No paired Mac is available on this network.")}
@@ -257,7 +272,7 @@ final class DeviceSync: @unchecked Sendable {
                 guard parts.count==3,parts[0]=="AV1",parts[1].count==32,parts[1].allSatisfy({$0.isHexDigit}),let key=Data(base64Encoded:parts[2]),key.count==32 else{throw VaultError.message("That pairing code is incomplete. Copy the entire code from your other device.")}
                 self.config=["group":parts[1],"secret":parts[2]];try self.saveConfig();self.startOnQueue();result=self.status()
             case "syncCode":result=["code":self.pairingCode()]
-            case "syncDisconnect":self.stopOnQueue();self.config=nil;Self.deleteKey(self.keyAccount);self.phase="Not paired";self.problem="";self.lastSync=0;result=self.status();self.publish()
+            case "syncDisconnect":self.directPeer=nil;UserDefaults.standard.removeObject(forKey:"labPeerAddress."+self.keyAccount);self.stopOnQueue();self.config=nil;Self.deleteKey(self.keyAccount);self.phase="Not paired";self.problem="";self.lastSync=0;result=self.status();self.publish()
             case "syncNow":if self.busy.isEmpty && (!self.problem.isEmpty || self.endpoints.isEmpty){self.startOnQueue()};self.forceNextSync=true;self.phase=self.busy.isEmpty ? "Connecting to paired devices":"Sync in progress";self.synchronizeAll();self.requestPeerSync();result=self.status();self.publish()
             default:result=self.status()
             }
@@ -279,7 +294,7 @@ final class DeviceSync: @unchecked Sendable {
                 var raw=value,buffer=[CChar](repeating:0,count:Int(INET_ADDRSTRLEN))
                 guard inet_ntop(AF_INET,&raw,&buffer,socklen_t(INET_ADDRSTRLEN)) != nil else{continue}
                 let text=String(cString:buffer)
-                if Self.localIPv4(text){return text+":"+String(port)}
+                if PeerAddress.privateIPv4(text){return text+":"+String(port)}
             }
             return nil
         }
@@ -287,15 +302,9 @@ final class DeviceSync: @unchecked Sendable {
         return nil
         #endif
     }
-    private static func localIPv4(_ host:String)->Bool {
-        let parts=host.split(separator:".").compactMap{Int($0)}
-        guard parts.count==4,parts.allSatisfy({$0>=0 && $0<=255}) else{return false}
-        return parts[0]==10 || (parts[0]==192 && parts[1]==168) || (parts[0]==172 && (16...31).contains(parts[1])) || (parts[0]==169 && parts[1]==254)
-    }
     private static func directRoute(_ address:String)throws->[NWEndpoint] {
-        let parts=address.split(separator:":")
-        guard parts.count==2,localIPv4(String(parts[0])),let number=UInt16(parts[1]),number>0,let port=NWEndpoint.Port(rawValue:number) else{throw VaultError.message("Use the private IPv4 address and port shown on your Mac, such as 192.168.1.20:50000.")}
-        return [.hostPort(host:NWEndpoint.Host(String(parts[0])),port:port)]
+        let route=try PeerAddress(address)
+        return [.hostPort(host:NWEndpoint.Host(route.host),port:NWEndpoint.Port(rawValue:route.port)!)]
     }
     private func status()->[String:Any]{["paired":config != nil,"phase":phase,"peers":endpoints.keys.sorted().map{["id":$0,"name":"Paired device · "+$0.prefix(6),"syncing":busy.contains($0)]},"lastSync":lastSync,"error":problem,"device":device,"transport":"TLS 1.2 · ECDHE + ChaCha20-Poly1305"]}
     private func publish(){

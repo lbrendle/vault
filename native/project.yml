@@ -16,9 +16,6 @@ packages:
 settings:
   base:
     SWIFT_VERSION: '5.9'
-    VAULT_IOS_BUNDLE_IDENTIFIER: com.archii.vault.ios
-    VAULT_MAC_BUNDLE_IDENTIFIER: com.archii.vault
-    VAULT_DISPLAY_NAME: Vault
     MARKETING_VERSION: '0.5.0'
     CURRENT_PROJECT_VERSION: '28'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
@@ -83,14 +80,14 @@ targets:
       base:
         SWIFT_OBJC_BRIDGING_HEADER: ../Sources/VaultApp/LabPython.h
         ENABLE_TESTABILITY: YES
-        PRODUCT_BUNDLE_IDENTIFIER: $(VAULT_IOS_BUNDLE_IDENTIFIER)
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: Vault_graphite_light Vault_graphite_dark Vault_linen_light Vault_linen_dark Vault_sage_light Vault_sage_dark Vault_ocean_light Vault_ocean_dark Vault_iris_light Vault_iris_dark Vault_rose_light Vault_rose_dark Vault_slate_light Vault_slate_dark Vault_cocoa_light Vault_cocoa_dark Vault_butter_light Vault_butter_dark Vault_peach_light Vault_peach_dark Vault_terracotta_light Vault_terracotta_dark Vault_amber_light Vault_amber_dark Vault_forest_light Vault_forest_dark Vault_matcha_light Vault_matcha_dark Vault_moss_light Vault_moss_dark Vault_sandstone_light Vault_sandstone_dark Vault_riviera_light Vault_riviera_dark Vault_glacier_light Vault_glacier_dark Vault_blue_hour_light Vault_blue_hour_dark Vault_midnight_light Vault_midnight_dark Vault_cherry_light Vault_cherry_dark Vault_orchid_light Vault_orchid_dark Vault_plum_light Vault_plum_dark Vault_ink_light Vault_ink_dark
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Sync your vault directly with your paired devices. No cloud storage is used.
         TARGETED_DEVICE_FAMILY: '1,2'
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: $(VAULT_DISPLAY_NAME)
+        INFOPLIST_KEY_CFBundleDisplayName: Vault
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIFileSharingEnabled: YES
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
@@ -144,7 +141,7 @@ targets:
     info:
       path: MacInfo.plist
       properties:
-        CFBundleDisplayName: $(VAULT_DISPLAY_NAME)
+        CFBundleDisplayName: Vault
         CFBundleIconFile: Vault
         CFBundleShortVersionString: '0.5.0'
         CFBundleVersion: '28'
@@ -156,7 +153,7 @@ targets:
     settings:
       base:
         ENABLE_TESTABILITY: YES
-        PRODUCT_BUNDLE_IDENTIFIER: $(VAULT_MAC_BUNDLE_IDENTIFIER)
+        PRODUCT_BUNDLE_IDENTIFIER: com.archii.vault
         PRODUCT_NAME: Vault
         CODE_SIGNING_ALLOWED: NO
         ENABLE_HARDENED_RUNTIME: YES
