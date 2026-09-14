@@ -6,7 +6,7 @@
 
 Vault is a private document workspace built around ordinary folders. Open your existing Markdown vault, read PDFs, follow connections, and talk with a model running on your own hardware. Keep the folder on your drive. Take a backup with you. Your research does not need a hosted workspace.
 
-**Public beta: `0.5.0-beta.3` (build 28).** Read the [document and device support notes](docs/COMPATIBILITY.md) before moving a critical workflow.
+**Public beta: `0.5.0-beta.3` (build 29).** Read the [document and device support notes](docs/COMPATIBILITY.md) before moving a critical workflow.
 
 [![Watch Vault on Mac, iPad, and iPhone](docs/media/vault-demo-poster.jpg)](https://github.com/lbrendle/vault/releases/download/v0.5.0-beta.1/vault-demo-1080p.mp4)
 
@@ -61,7 +61,7 @@ Device sync uses an authenticated, encrypted direct connection on your local net
 
 Get the latest [release](https://github.com/lbrendle/vault/releases). Mac downloads target **Apple silicon, macOS 14+**. Release notes describe signing/notarization status; this beta is not distributed through the App Store.
 
-For iPhone and iPad, use the [TestFlight invitation](https://testflight.apple.com/join/2G2ngjAk). **Build 28 adds the optional Python and notebook Lab.** The release notes record upload and processing status. The first beta (build 26) is still awaiting Apple review; public installation requires approval. The app supports iOS/iPadOS 17+, with local model compatibility depending on hardware and available memory. Both Qwen starters are available in Settings → Models & chat. You can also build with Xcode and your own signing team. [iPhone and iPad installation](docs/INSTALL_IOS.md).
+For iPhone and iPad, use the [TestFlight invitation](https://testflight.apple.com/join/2G2ngjAk). **Build 29 adds the optional Python and notebook Lab.** The release notes record upload and processing status. The first beta (build 26) is still awaiting Apple review; public installation requires approval. The app supports iOS/iPadOS 17+, with local model compatibility depending on hardware and available memory. Both Qwen starters are available in Settings → Models & chat. You can also build with Xcode and your own signing team. [iPhone and iPad installation](docs/INSTALL_IOS.md).
 
 ```sh
 git clone https://github.com/lbrendle/vault.git

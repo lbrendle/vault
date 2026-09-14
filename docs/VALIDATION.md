@@ -8,7 +8,7 @@ The Qwen 3.5 4B checkpoint completed a native local text-generation smoke test o
 
 A compile is not a physical-device inference result. Local execution is not the same as a separately observed radios-off test. Complete format and workflow coverage, universal hardware support, independent security auditing, App Store approval, and seamless iOS background networking are not claimed.
 
-## Optional Lab — build 28, September 14, 2026
+## Optional Lab — build 29, September 14, 2026
 
 These checks distinguish earlier physical-device execution from the final workspace layout checks.
 

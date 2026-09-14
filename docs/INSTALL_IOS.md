@@ -2,7 +2,7 @@
 
 [Join the Vault TestFlight beta](https://testflight.apple.com/join/2G2ngjAk).
 
-The Lab release is **0.5.0 (28)**. Check the [release notes](https://github.com/lbrendle/vault/releases/tag/v0.5.0-beta.3) for its upload and processing status. The first public beta, build 26, was still awaiting Apple review when this release was prepared. Apple permits only one build of a version in beta review at a time. An upload or GitHub release does not establish public TestFlight availability; the invitation accepts installations after Apple approves a build.
+The Lab release is **0.5.0 (29)**. Check the [release notes](https://github.com/lbrendle/vault/releases/tag/v0.5.0-beta.3) for its upload and processing status. The first public beta, build 26, was still awaiting Apple review when this release was prepared. Apple permits only one build of a version in beta review at a time. An upload or GitHub release does not establish public TestFlight availability; the invitation accepts installations after Apple approves a build.
 
 Lab is optional in **Settings → Lab**. It provides local Python and Jupyter notebook editing/execution, with a file tree, expandable development panels, and installed local models. See [Lab capabilities](LAB.md) for supported libraries and optional Mac assistants.
 

@@ -117,7 +117,7 @@ The embedded environment supports substantial programming, mathematics, data ana
 | Fresh-process reproduction, actual crash/process isolation, CPU multiprocessing | iOS embedded kernel does not satisfy these requirements |
 | Arbitrary Unix toolchains or CUDA/Triton | Not supplied by this iOS environment |
 
-See the [Lab validation entry](VALIDATION.md#optional-lab--build-28-september-14-2026) for the distinction between compilation, Simulator checks, physical-device execution, and paired-host testing.
+See the [Lab validation entry](VALIDATION.md#optional-lab--build-29-september-14-2026) for the distinction between compilation, Simulator checks, physical-device execution, and paired-host testing.
 
 ## Screenshots
 
