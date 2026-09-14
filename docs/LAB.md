@@ -117,14 +117,12 @@ The embedded environment supports substantial programming, mathematics, data ana
 | Fresh-process reproduction, actual crash/process isolation, CPU multiprocessing | iOS embedded kernel does not satisfy these requirements |
 | Arbitrary Unix toolchains or CUDA/Triton | Not supplied by this iOS environment |
 
-See the [Lab validation entry](VALIDATION.md#optional-lab-development-candidate--september-13-2026) for the distinction between compilation, Simulator checks, physical-device execution, and paired-host testing.
+See the [Lab validation entry](VALIDATION.md#optional-lab--build-28-september-14-2026) for the distinction between compilation, Simulator checks, physical-device execution, and paired-host testing.
 
 ## Screenshots
 
-These captures use a fictional guide and experiment. The iPad screenshot is from physical hardware; the iPhone screenshot is from Apple's Simulator.
+The current workspace captures below use fictional experiments in Apple's iPhone and iPad Simulators. Physical-device execution and earlier layout checks are recorded separately in [VALIDATION.md](VALIDATION.md).
 
-![Notebook executed inside Vault on a physical iPad](screenshots/lab-ipad-notebook.png)
-
-![Optional Lab setting on iPad](screenshots/lab-ipad-settings.png)
+![Notebook and assistant in the iPad Simulator](screenshots/lab-ipad-simulator-workspace.png)
 
 ![Notebook in the iPhone Simulator](screenshots/lab-iphone-simulator-notebook.png)
