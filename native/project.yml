@@ -53,7 +53,7 @@ targets:
       path: Info.plist
       properties:
         CFBundleShortVersionString: "0.5.0"
-        CFBundleVersion: "29"
+        CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         "UISupportedInterfaceOrientations~ipad": [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -144,7 +144,7 @@ targets:
         CFBundleDisplayName: Vault
         CFBundleIconFile: Vault
         CFBundleShortVersionString: '0.5.0'
-        CFBundleVersion: '29'
+        CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
         LSMultipleInstancesProhibited: true
         NSHighResolutionCapable: true
         NSBonjourServices: ['_archiivault._tcp']
