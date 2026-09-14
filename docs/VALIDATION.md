@@ -8,7 +8,7 @@ The Qwen 3.5 4B checkpoint completed a native local text-generation smoke test o
 
 A compile is not a physical-device inference result. Local execution is not the same as a separately observed radios-off test. Complete format and workflow coverage, universal hardware support, independent security auditing, App Store approval, and seamless iOS background networking are not claimed.
 
-## Optional Lab — build 29, September 14, 2026
+## Optional Lab — build 30, September 14, 2026
 
 These checks distinguish earlier physical-device execution from the final workspace layout checks.
 
@@ -19,7 +19,7 @@ These checks distinguish earlier physical-device execution from the final worksp
 - A physical iPad UI test enabled Lab, opened a Python file through an ordinary note link, ran it in its original folder, opened a notebook through a wikilink, ran and saved its output, followed its Markdown link back to the guide, disabled Lab, and verified that it remained hidden after relaunch. An earlier physical test covered editing Python with the software keyboard and running the saved file after relaunch.
 - The same link, execution, toggle, and relaunch flow passed in the iPhone 17 Pro Simulator. Screenshot review verified the phone's two-row toolbar and accessible footer controls after correcting overlapping labels.
 - Mac UI checks followed note links into the original Python file and notebook, executed both through the local Python process, generated a Matplotlib plot, and followed the notebook link back to the guide. A separate Mac worker check passed SciPy, scikit-learn, real subprocess execution, and pytest.
-- The revised file tree, expanded/shrunken tools, packages panel, assistant settings, and keyboard layout passed XCTest interaction checks in both iPhone and iPad Simulators. Console and assistant input bounds stayed above the software keyboard. Final physical-device UI rechecks were blocked when Xcode could not initialize device automation; the iPad was unavailable for the latest installation.
+- IPython installed and imported in the iPhone Simulator. A saved CSV inside a run folder opened in the editor. The revised file tree, expanded/shrunken tools, packages panel, assistant settings, and keyboard layout passed XCTest interaction checks in both iPhone and iPad Simulators. Console and assistant input bounds stayed above the software keyboard. Final physical-device UI rechecks were blocked when Xcode could not initialize device automation; the iPad was unavailable for the latest installation.
 - Distribution validation identified build-only NumPy static libraries and incorrect Python-extension bundle types. Packaging now removes those static archives, marks extension frameworks as FMWK, re-signs them, and validates native-extension references in CI.
 - Mac setup recovered from a missing Python executable through the app's host settings, with remote hosting disabled.
 
