@@ -16,6 +16,8 @@ final class DeviceSync: @unchecked Sendable {
     private let emit:([String:Any])->Void
     private let changed:([String])->Void
     private var modelChannel:PeerChannel?
+    private var labChannel:PeerChannel?
+    private var labJob:String?
     private var listener:NWListener?,browser:NWBrowser?,timer:DispatchSourceTimer?
     private var channels=[PeerChannel](),endpoints=[String:[NWEndpoint]](),busy=Set<String>()
     private var config:[String:String]?,phase="Not paired",lastSync:Double=0,problem=""
@@ -45,7 +47,7 @@ final class DeviceSync: @unchecked Sendable {
     deinit {if let foregroundObserver{NotificationCenter.default.removeObserver(foregroundObserver)}}
     func start(){queue.async{[weak self] in self?.startOnQueue()}}
     func stop(){queue.async{[weak self] in self?.stopOnQueue()}}
-    private func stopOnQueue(){generation=UUID();metadataBusy=[];listener?.cancel();browser?.cancel();timer?.cancel();listener=nil;browser=nil;timer=nil;channels.forEach{$0.close()};modelChannel?.close();modelChannel=nil;channels=[];endpoints=[:];busy=[]}
+    private func stopOnQueue(){generation=UUID();metadataBusy=[];listener?.cancel();browser?.cancel();timer?.cancel();listener=nil;browser=nil;timer=nil;channels.forEach{$0.close()};modelChannel?.close();modelChannel=nil;labChannel?.close();labChannel=nil;channels=[];endpoints=[:];busy=[]}
     private func startOnQueue(){
         stopOnQueue();guard let config,let encoded=config["secret"],let secret=Data(base64Encoded:encoded),secret.count==32,let group=config["group"] else{publish();return}
         do {
@@ -86,10 +88,29 @@ final class DeviceSync: @unchecked Sendable {
             let request=try await channel.receive(),command=request["command"] as? String ?? "",args=request["args"] as? [String:Any] ?? [:]
             if command=="hello" {
                 #if os(macOS)
-                try await channel.send(["version":1,"device":device,"capabilities":PeerTransfer.capabilities,"model":true,"models":ModelLibrary.catalog()["models"] ?? [],"name":Host.current().localizedName ?? "Mac"])
+                try await channel.send(["version":1,"device":device,"capabilities":PeerTransfer.capabilities,"model":true,"lab":LabRuntime.enabled && LabHostRuntime.enabled,"models":ModelLibrary.catalog()["models"] ?? [],"name":Host.current().localizedName ?? "Mac"])
                 #else
                 try await channel.send(["version":1,"device":device,"capabilities":PeerTransfer.capabilities,"model":false,"name":"iPad or iPhone"])
                 #endif
+            } else if command=="labStatus" {
+                #if os(macOS)
+                var status=LabHostRuntime.shared.status();status["enabled"]=LabRuntime.enabled && LabHostRuntime.enabled;try await channel.send(status)
+                #else
+                try await channel.send(["enabled":false])
+                #endif
+            } else if command=="labRun" {
+                #if os(macOS)
+                try await serveLab(channel,args:args)
+                #else
+                try await channel.send(["error":"Choose a paired Mac to host this run."])
+                #endif
+                return
+            } else if command=="labCancel" {
+                #if os(macOS)
+                let canCancel=await withCheckedContinuation{c in queue.async{c.resume(returning:self.labJob==args["job"] as? String && self.labJob != nil)}}
+                if canCancel {LabHostRuntime.shared.call("labCancel",args:[:],root:store.root,reply:{_,_ in})}
+                #endif
+                try await channel.send(["ok":true]);return
             } else if command=="requestSync" {
                 try await channel.send(["ok":true]);queue.async{self.forceNextSync=true;self.synchronizeAll()}
             } else if command=="modelChat" {
@@ -127,6 +148,66 @@ final class DeviceSync: @unchecked Sendable {
                 c.close()
             }catch {channel?.close();event(["event":"error","data":["message":error.localizedDescription]]);event(["event":"unloaded","data":[:]]);if !replied {DispatchQueue.main.async{reply(nil,error.localizedDescription)}}}
             self.queue.async{self.modelChannel=nil}
+        }
+    }}
+    #if os(macOS)
+    private func serveLab(_ channel:PeerChannel,args:[String:Any])async throws {
+        guard LabRuntime.enabled && LabHostRuntime.enabled else{try await channel.send(["error":"Enable Lab and the Mac host in Vault on your Mac first."]);return}
+        let job=args["job"] as? String ?? ""
+        guard UUID(uuidString:job) != nil,let project=args["project"] as? String,!project.isEmpty else{throw VaultError.message("Invalid lab project")}
+        let base:String
+        if project.hasPrefix("@/"){base=String(project.dropFirst(2));_ = try store.safeURL(base,requireDocument:false)}
+        else{guard !project.contains("/"),!project.hasPrefix(".") else{throw VaultError.message("Invalid lab project")};base="Labs/"+project}
+        let admitted=await withCheckedContinuation{c in queue.async{if self.labJob != nil{c.resume(returning:false)}else{self.labJob=job;c.resume(returning:true)}}}
+        guard admitted else{try await channel.send(["error":"Another lab command is running on the Mac."]);return}
+        defer{queue.async{self.labJob=nil}}
+        do {
+            // Source text is sent with the run. Every supporting file must already match the synced iPad project.
+            for file in args["manifest"] as? [[String:Any]] ?? [] {
+                guard let path=file["path"] as? String,let hash=file["sha256"] as? String else{throw VaultError.message("Invalid project manifest")}
+                let local=try store.safeURL(base.isEmpty ? path:base+"/"+path)
+                guard let localHash=try? SyncCatalog.digest(local),localHash==hash else{throw VaultError.message("Sync this project first. The Mac copy differs: "+path)}
+            }
+            var forwarded=args;forwarded["execution"]="paired-mac"
+            let value:Any=try await withCheckedThrowingContinuation{c in LabHostRuntime.shared.call("labRun",args:forwarded,root:store.root){value,error in if let error{c.resume(throwing:VaultError.message(error))}else{c.resume(returning:value ?? [:])}}}
+            var result=value as? [String:Any] ?? [:];result["execution"]="paired-mac";result["host"]=Host.current().localizedName ?? "Mac"
+            let data=try JSONSerialization.data(withJSONObject:result,options:.withoutEscapingSlashes)
+            guard data.count<=64*1024*1024 else{throw VaultError.message("The Mac result exceeds 64 MiB.")}
+            let chunkSize=768*1024,count=(data.count+chunkSize-1)/chunkSize
+            try await channel.send(["chunks":count])
+            for start in stride(from:0,to:data.count,by:chunkSize){try await channel.send(["data":data[start..<min(start+chunkSize,data.count)].base64EncodedString()])}
+            documentsChanged((result["files"] as? [[String:Any]] ?? []).compactMap{($0["path"] as? String).map{base.isEmpty ? $0:base+"/"+$0}})
+        }catch{try await channel.send(["error":error.localizedDescription])}
+    }
+    #endif
+    func lab(_ method:String,args:[String:Any],reply:@escaping(Any?,String?)->Void){queue.async{
+        if method=="labRemoteRun",self.labChannel != nil {DispatchQueue.main.async{reply(nil,"The paired Mac is already running a lab command.")};return}
+        guard let encoded=self.config?["secret"],let secret=Data(base64Encoded:encoded) else{DispatchQueue.main.async{reply(nil,"Pair Vault Lab with your Mac in Device sync, and keep both apps open on the same local network.")};return}
+        var endpoints=Array(self.endpoints.values)
+        if let address=args["address"] as? String,!address.isEmpty {
+            do{endpoints=[try Self.directRoute(address)]}catch{DispatchQueue.main.async{reply(nil,error.localizedDescription)};return}
+        }
+        Task {
+            var channel:PeerChannel?
+            do {
+                for endpoint in endpoints {
+                    var candidate:PeerChannel?
+                    do {let c=try await PeerChannel.connect(to:endpoint,secret:secret);candidate=c;let hello=try await c.request("hello");if hello["model"] as? Bool==true{channel=c;break}}catch{}
+                    candidate?.close()
+                }
+                guard let c=channel else{throw VaultError.message("No paired Mac is available on this network.")}
+                defer{c.close()}
+                if method=="labRemoteStatus" {let result=try await c.request("labStatus");DispatchQueue.main.async{reply(result,nil)};return}
+                if method=="labRemoteCancel" {_ = try await c.request("labCancel",["job":args["job"] ?? ""]);DispatchQueue.main.async{reply(true,nil)};return}
+                self.queue.async{self.labChannel=c}
+                defer{self.queue.async{self.labChannel=nil}}
+                let first=try await c.request("labRun",args,timeout:660)
+                guard let count=first["chunks"] as? Int,count>0,count<=86 else{throw VaultError.message("Invalid lab result from Mac.")}
+                var data=Data()
+                for _ in 0..<count {let part=try await c.receive();guard let text=part["data"] as? String,let bytes=Data(base64Encoded:text),bytes.count<=768*1024 else{throw VaultError.message("Invalid lab result chunk.")};data.append(bytes)}
+                let value=try JSONSerialization.jsonObject(with:data)
+                DispatchQueue.main.async{reply(value,nil)}
+            }catch{channel?.close();DispatchQueue.main.async{reply(nil,error.localizedDescription)}}
         }
     }}
     func documentsChanged(_ paths:[String]){queue.async{[weak self] in guard let self,let transfer=self.transfer else{return};self.changesQueue.async{do{try transfer.catalog.refresh(paths);self.queue.async{self.synchronizeAll()}}catch{self.queue.async{self.problem=error.localizedDescription;self.publish()}}}}}
@@ -184,6 +265,38 @@ final class DeviceSync: @unchecked Sendable {
         }catch{DispatchQueue.main.async{reply(nil,error.localizedDescription)}}
     }}
     private func pairingCode()->String {guard let c=config else{return ""};return "AV1."+(c["group"] ?? "")+"."+(c["secret"] ?? "")}
+    func labAddress()->String? {
+        #if os(macOS)
+        return queue.sync {
+            guard let port=listener?.port?.rawValue else{return nil}
+            var head:UnsafeMutablePointer<ifaddrs>?
+            guard getifaddrs(&head)==0 else{return nil};defer{freeifaddrs(head)}
+            var current=head
+            while let node=current {
+                defer{current=node.pointee.ifa_next}
+                guard let address=node.pointee.ifa_addr,address.pointee.sa_family==UInt8(AF_INET) else{continue}
+                let value=UnsafeRawPointer(address).assumingMemoryBound(to:sockaddr_in.self).pointee.sin_addr
+                var raw=value,buffer=[CChar](repeating:0,count:Int(INET_ADDRSTRLEN))
+                guard inet_ntop(AF_INET,&raw,&buffer,socklen_t(INET_ADDRSTRLEN)) != nil else{continue}
+                let text=String(cString:buffer)
+                if Self.localIPv4(text){return text+":"+String(port)}
+            }
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+    private static func localIPv4(_ host:String)->Bool {
+        let parts=host.split(separator:".").compactMap{Int($0)}
+        guard parts.count==4,parts.allSatisfy({$0>=0 && $0<=255}) else{return false}
+        return parts[0]==10 || (parts[0]==192 && parts[1]==168) || (parts[0]==172 && (16...31).contains(parts[1])) || (parts[0]==169 && parts[1]==254)
+    }
+    private static func directRoute(_ address:String)throws->[NWEndpoint] {
+        let parts=address.split(separator:":")
+        guard parts.count==2,localIPv4(String(parts[0])),let number=UInt16(parts[1]),number>0,let port=NWEndpoint.Port(rawValue:number) else{throw VaultError.message("Use the private IPv4 address and port shown on your Mac, such as 192.168.1.20:50000.")}
+        return [.hostPort(host:NWEndpoint.Host(String(parts[0])),port:port)]
+    }
     private func status()->[String:Any]{["paired":config != nil,"phase":phase,"peers":endpoints.keys.sorted().map{["id":$0,"name":"Paired device · "+$0.prefix(6),"syncing":busy.contains($0)]},"lastSync":lastSync,"error":problem,"device":device,"transport":"TLS 1.2 · ECDHE + ChaCha20-Poly1305"]}
     private func publish(){
         let value=status();emit(value)

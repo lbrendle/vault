@@ -31,3 +31,5 @@ models/*
 !models/starter-models.json
 !models/Qwen-LICENSE.txt
 !models/Qwen-NOTICE.txt
+
+native/PythonSupport/

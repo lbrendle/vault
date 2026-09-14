@@ -175,3 +175,6 @@ The Vault icon was created for this project with generative image assistance; th
 | swift-syntax | 603.0.2 | [License and notices](licenses/dependencies/swift-syntax.txt) |
 | swift-transformers | 1.3.0 | [License and notices](licenses/dependencies/swift-transformers.txt) |
 | yyjson | 0.12.0 | [License and notices](licenses/dependencies/yyjson.txt) |
+
+
+The optional Lab workspace includes embedded Python and scientific libraries on iOS. Their pinned sources and retained notices are listed in [Lab dependencies](licenses/LAB-DEPENDENCIES.md).

@@ -1,6 +1,23 @@
 import XCTest
 @testable import VaultCore
 final class VaultCoreTests:XCTestCase {
+ func testCodeLinksKeepTheirExtensionAndRelativeFolder() throws {
+  var rules=store.rules;rules.documentExtensions=Array(Set(rules.documentExtensions+VaultRules.codeExtensions));try store.saveRules(rules)
+  try fixture("Research/Guide.md","[[baseline.py]]\n[Notebook](Starter%20Lab/experiment.ipynb)\n")
+  try fixture("Research/Starter Lab/baseline.py","print(42)")
+  try fixture("Research/Starter Lab/baseline.md","A note with the same stem")
+  try fixture("Research/Starter Lab/experiment.ipynb","{\"nbformat\":4,\"cells\":[]}")
+  _ = try store.scan()
+  XCTAssertEqual(try store.resolve("baseline.py",from:"Research/Guide.md").first?["path"] as? String,"Research/Starter Lab/baseline.py")
+  XCTAssertEqual(try store.resolve("Starter%20Lab/experiment.ipynb",from:"Research/Guide.md").first?["path"] as? String,"Research/Starter Lab/experiment.ipynb")
+  XCTAssertEqual(try store.resolve("baseline.md",from:"Research/Guide.md").first?["ext"] as? String,"md")
+  XCTAssertTrue(try store.resolve("baseline.swift",from:"Research/Guide.md").isEmpty)
+  XCTAssertEqual(try store.backlinks("Research/Starter Lab/baseline.py").count,1)
+  XCTAssertEqual(try store.backlinks("Research/Starter Lab/experiment.ipynb").count,1)
+  try fixture("Research/Starter Lab/experiment.ipynb","{\"nbformat\":4,\"cells\":[{\"cell_type\":\"markdown\",\"source\":[\"[Guide](../Guide.md)\"]}]}")
+  try store.refreshPaths(["Research/Starter Lab/experiment.ipynb"])
+  XCTAssertEqual(try store.backlinks("Research/Guide.md").first?["path"] as? String,"Research/Starter Lab/experiment.ipynb")
+ }
  func testBundleAssetsNormalizeTheRootBeforeContainmentCheck() throws {
   let base=URL(fileURLWithPath:"/private/var/containers/Bundle/../Bundle/Application/test/ArchiiVault.app/web")
   let index=try VaultAsset.url(path:"/index.html",root:base)

@@ -1,0 +1,217 @@
+[
+  {
+    "name": "Python-3.12-iOS-support.b10.tar.gz",
+    "url": "https://github.com/beeware/Python-Apple-support/releases/download/3.12-b10/Python-3.12-iOS-support.b10.tar.gz",
+    "sha256": "18fb042d47b7ec441282eb96da0193e3093de7f02add35f5745d73491c6c0843"
+  },
+  {
+    "name": "numpy",
+    "version": "1.26.2",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/numpy/1.26.2/numpy-1.26.2-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "6224d2f3a14163021af85626df0aefb162fa03e58d8457906c8af63ea45ac96f"
+  },
+  {
+    "name": "numpy",
+    "version": "1.26.2",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/numpy/1.26.2/numpy-1.26.2-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "5dbb8597779f0958c3f56bca80d8289e58a1a0008f33c285e657a877961338ef"
+  },
+  {
+    "name": "pandas",
+    "version": "1.5.3",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/pandas/1.5.3/pandas-1.5.3-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "f69601c8d59819f1c9ebaad2b4330354e94afdb9f1d7eaa6efca7255aec8ef52"
+  },
+  {
+    "name": "pandas",
+    "version": "1.5.3",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/pandas/1.5.3/pandas-1.5.3-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "f61c44470c1e2b81223c951eb06f6879f8cde9a24750797e4fa0b66ccc0d58b1"
+  },
+  {
+    "name": "matplotlib",
+    "version": "3.6.0",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/matplotlib/3.6.0/matplotlib-3.6.0-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "8f3deefaf6d418e6a38b466c9b6c681ea99b60712f9ebb71e4907d71a5ad2252"
+  },
+  {
+    "name": "matplotlib",
+    "version": "3.6.0",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/matplotlib/3.6.0/matplotlib-3.6.0-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "92f35ebdcd3deb81c9811a65765965e0859e005de7c524d9566d9373f6301279"
+  },
+  {
+    "name": "contourpy",
+    "version": "1.0.5",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/contourpy/1.0.5/contourpy-1.0.5-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "09348bddf321e0851a85042b374c641ac604cf12df321b929fbe0d8f1c1984fa"
+  },
+  {
+    "name": "contourpy",
+    "version": "1.0.5",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/contourpy/1.0.5/contourpy-1.0.5-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "506b28caace2df222dd7c82f1dadf0e1c7176cc613b136e72082f840f50e6637"
+  },
+  {
+    "name": "kiwisolver",
+    "version": "1.3.2",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/kiwisolver/1.3.2/kiwisolver-1.3.2-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "c45167661f29c7a855851ab96cbeb00dc2b8be4f7713d732a23968a129c00933"
+  },
+  {
+    "name": "kiwisolver",
+    "version": "1.3.2",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/kiwisolver/1.3.2/kiwisolver-1.3.2-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "9bbee09e67d9396186b94a6419e88855a99abf38e6aaa8b4a5ca881d2065c2e0"
+  },
+  {
+    "name": "pillow",
+    "version": "10.4.0",
+    "target": "device",
+    "url": "https://pypi.anaconda.org/beeware/simple/pillow/10.4.0/pillow-10.4.0-cp312-cp312-ios_13_0_arm64_iphoneos.whl",
+    "sha256": "72861dba44189c0b7a461c8f0eca12bdd8c7a020989a584feb1a7d6cbfc6eebd"
+  },
+  {
+    "name": "pillow",
+    "version": "10.4.0",
+    "target": "simulator",
+    "url": "https://pypi.anaconda.org/beeware/simple/pillow/10.4.0/pillow-10.4.0-cp312-cp312-ios_13_0_arm64_iphonesimulator.whl",
+    "sha256": "58c828d047b7a48ef5096eb344566444cb1ea724114be95236919da21140c830"
+  },
+  {
+    "name": "cycler",
+    "version": "0.12.1",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl",
+    "sha256": "85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"
+  },
+  {
+    "name": "fonttools",
+    "version": "4.55.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/b4/4a/786589606d4989cb34d8bc766cd687d955aaf3039c367fe7104bcf82dc98/fonttools-4.55.0-py3-none-any.whl",
+    "sha256": "12db5888cd4dd3fcc9f0ee60c6edd3c7e1fd44b7dd0f31381ea03df68f8a153f"
+  },
+  {
+    "name": "packaging",
+    "version": "24.2",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/88/ef/eb23f262cca3c0c4eb7ab1933c3b1f03d021f2c48f54763065b6f0e321be/packaging-24.2-py3-none-any.whl",
+    "sha256": "09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759"
+  },
+  {
+    "name": "pyparsing",
+    "version": "3.2.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/be/ec/2eb3cd785efd67806c46c13a17339708ddc346cbb684eade7a6e6f79536a/pyparsing-3.2.0-py3-none-any.whl",
+    "sha256": "93d9577b88da0bbea8cc8334ee8b918ed014968fd2ec383e868fb8afb1ccef84"
+  },
+  {
+    "name": "python-dateutil",
+    "version": "2.9.0.post0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+    "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"
+  },
+  {
+    "name": "six",
+    "version": "1.16.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl",
+    "sha256": "8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"
+  },
+  {
+    "name": "pytz",
+    "version": "2024.2",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/11/c3/005fcca25ce078d2cc29fd559379817424e94885510568bc1bc53d7d5846/pytz-2024.2-py2.py3-none-any.whl",
+    "sha256": "31c7c1817eb7fae7ca4b8c7ee50c72f93aa2dd863de768e1ef4245d426aa0725"
+  },
+  {
+    "name": "sympy",
+    "version": "1.13.3",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/99/ff/c87e0622b1dadea79d2fb0b25ade9ed98954c9033722eb707053d310d4f3/sympy-1.13.3-py3-none-any.whl",
+    "sha256": "54612cf55a62755ee71824ce692986f23c88ffa77207b30c1368eda4a7060f73"
+  },
+  {
+    "name": "mpmath",
+    "version": "1.3.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+    "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+  },
+  {
+    "name": "networkx",
+    "version": "3.4.2",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl",
+    "sha256": "df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f"
+  },
+  {
+    "name": "pytest",
+    "version": "8.3.4",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/11/92/76a1c94d3afee238333bc0a42b82935dd8f9cf8ce9e336ff87ee14d9e1cf/pytest-8.3.4-py3-none-any.whl",
+    "sha256": "50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6"
+  },
+  {
+    "name": "iniconfig",
+    "version": "2.0.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/ef/a6/62565a6e1cf69e10f5727360368e451d4b7f58beeac6173dc9db836a5b46/iniconfig-2.0.0-py3-none-any.whl",
+    "sha256": "b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374"
+  },
+  {
+    "name": "pluggy",
+    "version": "1.5.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/88/5f/e351af9a41f866ac3f1fac4ca0613908d9a41741cfcf2228f4ad853b697d/pluggy-1.5.0-py3-none-any.whl",
+    "sha256": "44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669"
+  },
+  {
+    "name": "pip",
+    "version": "24.3.1",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/ef/7d/500c9ad20238fcfcb4cb9243eede163594d7020ce87bd9610c9e02771876/pip-24.3.1-py3-none-any.whl",
+    "sha256": "3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed"
+  },
+  {
+    "name": "setuptools",
+    "version": "75.6.0",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/55/21/47d163f615df1d30c094f6c8bbb353619274edccf0327b185cc2493c2c33/setuptools-75.6.0-py3-none-any.whl",
+    "sha256": "ce74b49e8f7110f9bf04883b730f4765b774ef3ef28f722cce7c273d253aaf7d"
+  },
+  {
+    "name": "dulwich",
+    "version": "0.22.6",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/6f/2d/4958e5473750bd54ed657bfc65849db0670443ca52715a98f6fb290a1e3b/dulwich-0.22.6-py3-none-any.whl",
+    "sha256": "a609c1939b8050c9876d0dd2b15302fef695759f479613c20025fbd4ece32bda"
+  },
+  {
+    "name": "urllib3",
+    "version": "2.2.3",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl",
+    "sha256": "ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac"
+  },
+  {
+    "name": "typing-extensions",
+    "version": "4.12.2",
+    "target": "shared",
+    "url": "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl",
+    "sha256": "04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"
+  }
+]

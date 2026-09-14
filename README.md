@@ -32,9 +32,13 @@ Vault is a private document workspace built around ordinary folders. Open your e
 - Keep conversations beside your research. Attach documents, cite local paths, stop a response, or branch a conversation.
 - Sync documents, attachments, saved conversations, and bookmarks directly between paired devices. Synced files remain available offline.
 
+## Optional development workspace
+
+The development branch adds **Settings → Lab → Enable Lab**. Code and notebooks open in place through existing Vault links, with local Python execution on iPhone/iPad and a local Python process on Mac. Markdown stays in the reader. See [Lab capabilities and current limits](docs/LAB.md). This feature is not part of the build 27 public beta described above.
+
 ## Two Qwen companions, ready to use
 
-The native MLX inference engine is included on all three platforms. No Python runtime, hosted API, account, or API key is needed.
+The native MLX inference engine is included on all three platforms. Model inference needs no Python runtime, hosted API, account, or API key.
 
 | Starter | Download size | Best starting point |
 | --- | --- | --- |
@@ -64,6 +68,7 @@ git clone https://github.com/lbrendle/vault.git
 cd vault
 npm ci --prefix web
 npm run build --prefix web
+python3 scripts/bootstrap-lab.py
 xcodegen generate --spec native/project.yml
 open native/ArchiiVault.xcodeproj
 ```
