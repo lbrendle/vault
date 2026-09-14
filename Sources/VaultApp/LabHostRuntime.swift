@@ -67,7 +67,8 @@ final class LabHostRuntime {
         let p=Process(),stdin=Pipe(),stdout=Pipe()
         p.executableURL=URL(fileURLWithPath:Self.executable)
         let resources=Bundle.main.resourceURL!.appendingPathComponent("lab-python")
-        p.arguments=["-u",resources.appendingPathComponent("vault_host.py").path]
+        // The signed application resources must remain unchanged after imports.
+        p.arguments=["-B","-u",resources.appendingPathComponent("vault_host.py").path]
         var env=ProcessInfo.processInfo.environment.filter{!$0.key.hasPrefix("DYLD_") && !$0.key.hasPrefix("XCTest") && !$0.key.hasPrefix("__XCODE") && $0.key != "XCInjectBundleInto"};env["PYTHONUTF8"]="1";env["PYTHONUNBUFFERED"]="1";p.environment=env
         p.standardInput=stdin;p.standardOutput=stdout;p.standardError=FileHandle.nullDevice
         try p.run();buffered.removeAll();process=p;input=stdin.fileHandleForWriting;output=stdout.fileHandleForReading
