@@ -8,6 +8,10 @@ The Qwen 3.5 4B checkpoint completed a native local text-generation smoke test o
 
 A compile is not a physical-device inference result. Local execution is not the same as a separately observed radios-off test. Complete format and workflow coverage, universal hardware support, independent security auditing, App Store approval, and seamless iOS background networking are not claimed.
 
+## Public beta distribution — September 15, 2026
+
+App Store Connect reports build 30 as VALID, not expired, with externalBuildState BETA_APPROVED and betaReviewState APPROVED. The public beta group is enabled and includes build 30. The public invitation displays Vault and its View in TestFlight link. This confirms external beta availability; installing this build through TestFlight was not repeated during this release-status check. The separate App Store version remains in Prepare for Submission.
+
 ## Optional Lab — build 30, September 14, 2026
 
 These checks distinguish earlier physical-device execution from the final workspace layout checks.

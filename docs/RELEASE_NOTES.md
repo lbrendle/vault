@@ -14,7 +14,7 @@ Enable **Settings → Lab → Enable Lab** to work with Python and Jupyter noteb
 
 **Mac:** choose the smaller Apple-silicon app download or Mac Starter with the pinned, licensed Qwen 3.5 2B model. macOS 14 or later is required. Both bundles are Developer ID signed and are not notarized. For Lab, prepare a local Python environment using [the build guide](BUILDING.md); remote hosting is optional.
 
-**iPhone/iPad:** one universal build, **0.5.0 (30)**, uses the original Vault app identifier. Install updates over Vault to preserve local files and models. [TestFlight invitation](https://testflight.apple.com/join/2G2ngjAk). GitHub publication and successful uploads do not imply Apple beta-review approval. Current upload, processing, and review status are recorded on the [GitHub release](https://github.com/lbrendle/vault/releases/tag/v0.5.0-beta.3).
+**iPhone/iPad:** one universal build, **0.5.0 (30)**, uses the original Vault app identifier. Install updates over Vault to preserve local files and models. [Join the public TestFlight beta](https://testflight.apple.com/join/2G2ngjAk). Apple has approved build 30 for external beta testing, and the public invitation was verified on September 15, 2026. App Store publication is a separate release step.
 
 ## Validation and limits
 
