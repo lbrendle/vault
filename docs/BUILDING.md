@@ -72,3 +72,7 @@ For a Mac Starter edition, copy the checksum-verified 2B folder into `Vault.app/
 Before generating the iOS project, run `python3 scripts/bootstrap-lab.py` with Python 3.12 or newer. It verifies `native/lab-dependencies.lock.json` and prepares the ignored `native/PythonSupport` directory. The existing iPhone/iPad target packages and signs the embedded scientific libraries; the Mac target includes the worker and uses an installed Python environment. See [Lab setup](LAB.md). Native CI performs this preparation before building both existing targets.
 
 The app remains **Vault**, with bundle identifier `com.archii.vault` on Mac and `com.archii.vault.ios` on iPhone/iPad. Lab is a setting in those existing app targets and uses the same repository and release process.
+
+## Publishing from another Apple developer account
+
+The iOS app target accepts `VAULT_IOS_BUNDLE_IDENTIFIER` as an Xcode build setting, alongside your own `DEVELOPMENT_TEAM`. It defaults to the original beta identifier so existing local build workflows keep their current application identity. Set a bundle identifier registered to your team when creating a separate distribution. A different bundle identifier creates a separate iPhone/iPad app and data container; it does not migrate the existing installation’s documents or models. Preserve the original app and copy or sync its files before removing it.

@@ -11,6 +11,6 @@ Next areas for focused contributions:
 - Better model memory estimates by architecture and device; more measured checkpoint support.
 - Broader keyboard/VoiceOver coverage and automated visual regressions.
 - Expanded Canvas/Bases compatibility and attachment indexing.
-- Notarized Mac downloads and a full App Store release.
+- A full App Store release under the maintainer’s personal developer account.
 
 These are future work, not features claimed by the current release. Discuss a concrete scope before building a large integration. Privacy and preservation of existing files remain constraints on every feature.

@@ -8,9 +8,13 @@ The Qwen 3.5 4B checkpoint completed a native local text-generation smoke test o
 
 A compile is not a physical-device inference result. Local execution is not the same as a separately observed radios-off test. Complete format and workflow coverage, universal hardware support, independent security auditing, App Store approval, and seamless iOS background networking are not claimed.
 
+## Mac notarization — September 15, 2026
+
+Apple accepted both beta.3 Mac packages for notarization. Their existing Developer ID signature belongs to lauren brendle. Both app bundles passed strict signature verification, ticket stapling and validation, and Gatekeeper assessment as Notarized Developer ID. The release archives were repackaged with their tickets; updated SHA-256 digests are published with the release. Application code and bundled model weights did not change.
+
 ## Public beta distribution — September 15, 2026
 
-App Store Connect reports build 30 as VALID, not expired, with externalBuildState BETA_APPROVED and betaReviewState APPROVED. The public beta group is enabled and includes build 30. The public invitation displays Vault and its View in TestFlight link. This confirms external beta availability; installing this build through TestFlight was not repeated during this release-status check. The separate App Store version remains in Prepare for Submission.
+App Store Connect reports build 30 as VALID, not expired, with externalBuildState BETA_APPROVED and betaReviewState APPROVED. The public beta group is enabled and includes build 30. The public invitation displays Vault and its View in TestFlight link. This confirms external beta availability. In the subsequent update check, the maintainer reported completing the public TestFlight update on both iPhone and iPad; device queries confirmed version 0.5.0 (30), with saved vault references still present. That check did not repeat live sync or model inference. The separate App Store release remains in preparation.
 
 ## Optional Lab — build 30, September 14, 2026
 
