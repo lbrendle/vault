@@ -4,7 +4,9 @@ export function mergeIncomingState(local,incoming){
  // It must neither dereference null nor populate the new workspace with old chats.
  if(!local||!incoming)return local;
  const chats=new Map((incoming.chats||[]).map(c=>[c.id,c]));
- for(const c of local.chats||[])if(!chats.has(c.id)||(c.updated||0)>=(chats.get(c.id).updated||0))chats.set(c.id,c);
+ // A newer local copy has edits that are not saved yet. Equal timestamps mean the saved copy is the merge of
+ // this one and another device's, so whichever holds more of the conversation is the complete one.
+ for(const c of local.chats||[]){const other=chats.get(c.id),mine=c.updated||0,theirs=other?.updated||0;if(!other||mine>theirs||(mine===theirs&&(c.messages?.length||0)>=(other.messages?.length||0)))chats.set(c.id,c)}
  const changes={...(incoming.bookmarkChanges||{})};
  for(const [path,change] of Object.entries(local.bookmarkChanges||{}))if(!changes[path]||change.modified>=changes[path].modified)changes[path]=change;
  const bookmarks=new Set([...(local.bookmarks||[]),...(incoming.bookmarks||[])]);

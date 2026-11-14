@@ -61,13 +61,21 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
             let vaultSync=sync
             DispatchQueue.global(qos:.utility).async { [weak self] in
             let watcher=VaultWatcher(path:store.root.path){[weak self] paths,rescan in
-                let relative=paths.filter{$0.hasPrefix(store.root.path+"/")}.map{String($0.dropFirst(store.root.path.count+1))}.filter{store.rules.includes($0)}
-                if relative.isEmpty && !rescan{return}
+                let inside=paths.filter{$0.hasPrefix(store.root.path+"/")}.map{String($0.dropFirst(store.root.path.count+1))}
+                let relative=inside.filter{store.rules.includes($0)}
+                // A folder renamed, moved or removed in Finder arrives as one event for the
+                // folder and none for its documents. Whether a path is such a folder is
+                // decided on the index queue, because the answer can wait for the index.
+                let others=inside.filter{!store.rules.includes($0) && store.rules.includes($0,directory:true)}
+                if relative.isEmpty && others.isEmpty && !rescan{return}
                 // File propagation must not wait behind full-text parsing of
                 // other large documents. Keep this bound to the watched vault.
-                vaultSync?.documentsChanged(relative)
+                if !relative.isEmpty || rescan {vaultSync?.documentsChanged(relative)}
                 self?.indexQueue.async {
-                    if rescan {_ = try? store.scan()}else{try? store.refreshPaths(relative)}
+                    let folders=others.filter{store.isFolder($0)}
+                    if relative.isEmpty && folders.isEmpty && !rescan{return}
+                    if !folders.isEmpty {vaultSync?.documentsChanged(folders)}
+                    if rescan || !folders.isEmpty {_ = try? store.scan()}else{try? store.refreshPaths(relative)}
                     if self?.store === store {self?.event("files",["paths":relative])}
                 }
             }
@@ -77,7 +85,9 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
         }
     }
     func userContentController(_ userContentController:WKUserContentController,didReceive message:WKScriptMessage,replyHandler:@escaping (Any?,String?)->Void) {
-        guard message.frameInfo.isMainFrame, let request=message.body as? [String:Any], let method=request["method"] as? String else {replyHandler(nil,"Invalid request");return}
+        // Only the bundled interface may call the bridge, never a vault document loaded as a page.
+        let origin=message.frameInfo.securityOrigin
+        guard message.frameInfo.isMainFrame, origin.`protocol`=="vault", origin.host=="app", let request=message.body as? [String:Any], let method=request["method"] as? String else {replyHandler(nil,"Invalid request");return}
         let args=request["args"] as? [String:Any] ?? [:]
         if method=="initialize" {
             let root=initialRoot;initialRoot=nil
@@ -89,6 +99,15 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
             replyHandler(["name":"mac"],nil)
             #else
             replyHandler(["name":"ios","device":UIDevice.current.userInterfaceIdiom == .phone ? "phone":"pad"],nil)
+            #endif
+            return
+        }
+        if method=="fold" {
+            // Events sent before the page loads are dropped, so the page asks once at launch.
+            #if os(iOS)
+            replyHandler((web?.superview as? KeyboardWorkspace)?.fold?.payload,nil)
+            #else
+            replyHandler(nil,nil)
             #endif
             return
         }
@@ -119,6 +138,9 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
                     let rounded=NSImage(size:NSSize(width:1024,height:1024));rounded.lockFocus();NSBezierPath(roundedRect:NSRect(x:56,y:56,width:912,height:912),xRadius:205,yRadius:205).addClip();image.draw(in:NSRect(x:56,y:56,width:912,height:912));rounded.unlockFocus();NSApp.applicationIconImage=rounded
                 }else{NSApp.applicationIconImage=nil}
                 #else
+                // iOS announces every icon change with an alert. The icon follows the theme only once this vault
+                // has a saved appearance; a first launch, or a vault that was never customised, leaves it alone.
+                guard args["matchIcon"] is Bool else{return}
                 let app=UIApplication.shared,desired=match ? iconName:nil
                 let icons=Bundle.main.object(forInfoDictionaryKey:"CFBundleIcons") as? [String:Any],alternates=icons?["CFBundleAlternateIcons"] as? [String:Any]
                 if app.applicationState == .active,app.supportsAlternateIcons,app.alternateIconName != desired,(!match || alternates?[iconName] != nil) {app.setAlternateIconName(desired){error in if let error {NSLog("Vault icon: %@",error.localizedDescription)}}}
@@ -364,12 +386,18 @@ final class Bridge:NSObject,WKScriptMessageHandlerWithReply,WKURLSchemeHandler,W
             guard size<80*1024*1024 else{throw VaultError.message("Open this large attachment with its native viewer")}
             let types=["html":"text/html","js":"application/javascript","css":"text/css","svg":"image/svg+xml","png":"image/png","jpg":"image/jpeg","jpeg":"image/jpeg","webp":"image/webp","gif":"image/gif","woff2":"font/woff2","woff":"font/woff","ttf":"font/ttf","pdf":"application/pdf","wasm":"application/wasm","mp3":"audio/mpeg","m4a":"audio/mp4","mp4":"video/mp4"]
             let data=try Data(contentsOf:target,options:.mappedIfSafe)
-            urlSchemeTask.didReceive(URLResponse(url:url,mimeType:types[target.pathExtension] ?? "application/octet-stream",expectedContentLength:data.count,textEncodingName:nil));urlSchemeTask.didReceive(data);urlSchemeTask.didFinish()
+            // A vault document is shown as an image, media or PDF. Its HTML is data and is never rendered as a page.
+            let mime=(url.host=="document" && target.pathExtension.lowercased()=="html") ? "text/plain":(types[target.pathExtension] ?? "application/octet-stream")
+            urlSchemeTask.didReceive(URLResponse(url:url,mimeType:mime,expectedContentLength:data.count,textEncodingName:nil));urlSchemeTask.didReceive(data);urlSchemeTask.didFinish()
         }catch{NSLog("Vault asset: %@",error.localizedDescription);urlSchemeTask.didFailWithError(error)}
     }
     func webView(_ webView:WKWebView,stop urlSchemeTask:WKURLSchemeTask) {}
     func webView(_ webView:WKWebView,decidePolicyFor navigationAction:WKNavigationAction,decisionHandler:@escaping (WKNavigationActionPolicy)->Void) {
-        if navigationAction.request.url?.scheme=="vault" || navigationAction.request.url?.absoluteString=="about:blank" {decisionHandler(.allow)}else{decisionHandler(.cancel)}
+        let url=navigationAction.request.url
+        // Only the bundled interface may become the top-level page, which owns the bridge. A vault
+        // document loads as an image, media or sub-frame; a navigation without a target frame opens a new page.
+        if navigationAction.targetFrame?.isMainFrame ?? true {decisionHandler(url?.scheme=="vault" && url?.host=="app" ? .allow:.cancel);return}
+        if url?.scheme=="vault" || url?.absoluteString=="about:blank" {decisionHandler(.allow)}else{decisionHandler(.cancel)}
     }
 }
 

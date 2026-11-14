@@ -59,6 +59,9 @@ struct VaultWebView:NSViewRepresentable {
 /// and never subtracts visualViewport height a second time.
 final class KeyboardWorkspace:UIView {
  let web:WKWebView
+ /// Called when a folding display starts or stops bending across the web view.
+ var foldChanged:((FoldReport?)->Void)?
+ private(set) var fold:FoldReport?
  private var lastKeyboardOpen:Bool?
  private var fullBottom:NSLayoutConstraint!
  private var keyboardBottom:NSLayoutConstraint!
@@ -74,6 +77,12 @@ final class KeyboardWorkspace:UIView {
    web.topAnchor.constraint(equalTo:topAnchor),web.leadingAnchor.constraint(equalTo:leadingAnchor),
    web.trailingAnchor.constraint(equalTo:trailingAnchor),fullBottom,keyboardBottom
   ])
+  // Fold reporting needs the iOS 27.1 SDK, which this check takes from Xcode 27.2 or newer.
+  // Older toolchains still build the app; it then treats every display as flat.
+  #if compiler(>=6.4.2)
+  // The hinge can move without resizing the window, so it asks for a layout pass too.
+  if #available(iOS 27.1,*) {addInteraction(UIHingeInteraction{[weak self] _,_ in self?.setNeedsLayout()})}
+  #endif
  }
  required init?(coder:NSCoder){fatalError("init(coder:) is unavailable")}
  override func layoutSubviews() {
@@ -81,6 +90,12 @@ final class KeyboardWorkspace:UIView {
   let height=keyboardLayoutGuide.layoutFrame.height
   let open=height>150 // Floating hardware-keyboard controls are not a docked keyboard.
   if open != lastKeyboardOpen {lastKeyboardOpen=open;web.evaluateJavaScript("document.documentElement.dataset.keyboard='\(open ? "open":"closed")'") {_,_ in}}
+  #if compiler(>=6.4.2)
+  if #available(iOS 27.1,*) {
+   let next=FoldReport.describe(divisions:web.reservedRegions(kind:.division).filter(\.isActive).map(\.frame),in:web.bounds)
+   if next != fold {fold=next;foldChanged?(next)}
+  }
+  #endif
  }
 }
 struct VaultWebView:UIViewRepresentable {
@@ -108,7 +123,10 @@ struct VaultWebView:UIViewRepresentable {
   web.scrollView.contentInsetAdjustmentBehavior = .never
   web.scrollView.automaticallyAdjustsScrollIndicatorInsets=false
   web.isOpaque=false;web.backgroundColor = .clear;web.scrollView.backgroundColor = .clear
-  context.coordinator.web=web;web.navigationDelegate=context.coordinator;web.uiDelegate=context.coordinator;web.load(URLRequest(url:URL(string:"vault://app/index.html")!));return KeyboardWorkspace(web:web)
+  context.coordinator.web=web;web.navigationDelegate=context.coordinator;web.uiDelegate=context.coordinator;web.load(URLRequest(url:URL(string:"vault://app/index.html")!))
+  let workspace=KeyboardWorkspace(web:web)
+  workspace.foldChanged={[weak bridge=context.coordinator] fold in bridge?.event("fold",fold?.payload ?? [:])}
+  return workspace
  }
  func updateUIView(_ view:KeyboardWorkspace,context:Context){}
 }

@@ -3,7 +3,8 @@
 ## Tools
 
 - Apple silicon Mac, macOS 14 or newer.
-- Xcode **26.6 or newer**, including the Metal toolchain. Accept Xcode's first-run setup and install the iOS SDK for device builds.
+- Xcode **26.6 or newer**, including the Metal toolchain (`xcodebuild -downloadComponent MetalToolchain` installs it for the selected Xcode). Accept Xcode's first-run setup and install the iOS SDK for device builds.
+- For **iPhone Duo**, build with Xcode **27.2 or newer**. Its iOS SDK lets the app fill both displays and compiles in fold reporting; iOS presents apps built with an earlier SDK at a conventional iPhone size. The iPhone Duo simulator needs an iOS 27.1 or newer simulator runtime (`xcodebuild -downloadPlatform iOS`).
 - Node.js **22 or newer** and npm.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen), for example `brew install xcodegen`.
 - Python 3.12+ to prepare the embedded iOS Lab dependencies and run the build scripts. Mac Lab uses an installed Python environment; model inference uses native MLX independently of Python.

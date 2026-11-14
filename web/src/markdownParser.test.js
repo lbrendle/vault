@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {markdownHTML,markdownSections} from './markdownParser.js';
-test('section rendering preserves reference links, footnotes, tasks, tables and fences',()=>{const content='# First\n\n[Early reference][last]\n\n- [ ] First task\n\n'+Array.from({length:50},(_,i)=>`## Section ${i}\n\nText with **formatting**, [[A note]], and note[^one].\n\n- [x] Task ${i}\n\n| One | Two |\n| --- | --- |\n| a | b |\n\n\`\`\`js\nlet x = ${i};\n\`\`\`\n\n`).join('')+'[last]: https://example.org\n\n[^one]: A footnote after every section.\n';const document=markdownSections(content,1000);assert.ok(document.sections.length>2);const html=document.sections.map((_,i)=>document.render(i)).join('');assert.equal(html,markdownHTML(content));assert.match(html,/href="https:\/\/example.org"/);const tasks=[...html.matchAll(/data-task-source="(\d+)"/g)].map(m=>Number(m[1]));assert.deepEqual(tasks,Array.from({length:51},(_,i)=>i));assert.ok(document.sections.some(s=>s.headings.includes('Section 40')))});
+import {markdownHTML,markdownSections,toggleTask} from './markdownParser.js';
+test('section rendering preserves reference links, footnotes, tasks, tables and fences',()=>{const content='# First\n\n[Early reference][last]\n\n- [ ] First task\n\n'+Array.from({length:50},(_,i)=>`## Section ${i}\n\nText with **formatting**, [[A note]], and note[^one].\n\n- [x] Task ${i}\n\n| One | Two |\n| --- | --- |\n| a | b |\n\n\`\`\`js\nlet x = ${i};\n\`\`\`\n\n`).join('')+'[last]: https://example.org\n\n[^one]: A footnote after every section.\n';const document=markdownSections(content,1000);assert.ok(document.sections.length>2);const html=document.sections.map((_,i)=>document.render(i)).join('');assert.equal(html,markdownHTML(content));assert.match(html,/href="https:\/\/example.org"/);const tasks=[...html.matchAll(/data-task-source="(\d+)"/g)].map(m=>Number(m[1]));const source=content.split('\n');assert.equal(tasks.length,51);assert.ok(tasks.every((line,index)=>/^- \[[ x]\] /.test(source[line])&&(index===0||line>tasks[index-1])));assert.ok(document.sections.some(s=>s.headings.includes('Section 40')))});
 
 test('multi-megabyte code blocks are bounded without dropping or changing code',()=>{const code=('a'.repeat(30000)+'😀\n').repeat(70),document=markdownSections('```text\n'+code+'```');assert.ok(document.sections.length>100);assert.ok(document.sections.every(s=>s.characters<=16000));const text=document.sections.map((_,i)=>document.render(i).match(/<code[^>]*>([\s\S]*?)<\/code>/)[1]).join('');assert.equal(text,code);assert.equal(document.sections[0].codeSegment,'first');assert.equal(document.sections.at(-1).codeSegment,'last')});
 
@@ -43,4 +43,20 @@ test('notebook paths with spaces, escaped characters, parent folders and wiki al
  }
  assert.match(markdownHTML('[Open](Notebooks/00%20Launch%20Pad.ipynb)'),/href="Notebooks\/00%20Launch%20Pad.ipynb"/);
  assert.match(markdownHTML('[[Notebooks/00 Launch Pad.ipynb|Open notebook]]'),/data-wiki="Notebooks\/00 Launch Pad.ipynb"/);
+});
+const taskLines=content=>[...markdownHTML(content).matchAll(/data-task-source="(-?\d+)"/g)].map(match=>Number(match[1]));
+test('each rendered checkbox knows the source line it came from',()=>{
+ const note=['---','status: draft','---','# Tasks','','```md','- [ ] an example inside a code block','```','','- [ ] first','- [x] second','','1. [ ] numbered','','> - [ ] quoted','','- [ ]','- [ ] last'].join('\n');
+ const lines=taskLines(note),source=note.split('\n');
+ assert.deepEqual(lines.map(line=>source[line]),['- [ ] first','- [x] second','1. [ ] numbered','> - [ ] quoted','- [ ] last']);
+});
+test('ticking a checkbox edits exactly its own line',()=>{
+ const note=['```md','- [ ] an example inside a code block','```','- [ ] first','1. [ ] numbered','> - [x] quoted','  * [ ] nested'].join('\n'),source=note.split('\n');
+ assert.equal(toggleTask(note,3,true).split('\n')[3],'- [x] first');
+ assert.equal(toggleTask(note,4,true).split('\n')[4],'1. [x] numbered');
+ assert.equal(toggleTask(note,5,false).split('\n')[5],'> - [ ] quoted');
+ assert.equal(toggleTask(note,6,true).split('\n')[6],'  * [x] nested');
+ for(const line of [3,4,5,6])assert.deepEqual(toggleTask(note,line,true).split('\n').filter((text,index)=>index!==line),source.filter((text,index)=>index!==line));
+ // A line that is not a task, including the look-alike inside the code block's neighbours, changes nothing.
+ for(const line of [0,2,-1,99,1.5])assert.equal(toggleTask(note,line,true),note);
 });

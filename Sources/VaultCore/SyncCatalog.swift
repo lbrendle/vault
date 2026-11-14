@@ -16,15 +16,29 @@ public struct SyncEntry: Codable, Equatable, Sendable {
 /// The disposable text index is never used as evidence that a document was deleted.
 public final class SyncCatalog: @unchecked Sendable {
     public let store:VaultStore
+    /// Identifies this device to its peers: pairing, discovery and the cursors peers keep for each other's journals.
     public let device:String
+    /// The key this catalog counts under in version vectors. It is stored in the catalog, so a
+    /// lost catalog starts a new replica instead of reissuing counters its peers have already seen.
+    public let replica:String
     public let db:Database
     private let lock=NSRecursiveLock()
     private var lastFullScan=Date.distantPast
+    /// Free bytes on the volume that holds incoming transfers. A property so a test can stand in for a full disk.
+    var freeSpace:(URL)->Int64={(try? FileManager.default.attributesOfFileSystem(forPath:$0.path)[.systemFreeSize] as? NSNumber)?.int64Value ?? Int64.max}
     public init(store:VaultStore,device:String)throws {
         self.store=store;self.device=device
-        db=try Database(store.cache.appendingPathComponent("sync.sqlite"))
+        let db=try Database(store.cache.appendingPathComponent("sync.sqlite"));self.db=db
         try db.execute("CREATE TABLE IF NOT EXISTS entries(path TEXT PRIMARY KEY,hash TEXT,size INTEGER,modified REAL,clock TEXT,deleted INTEGER,seen TEXT)")
         try db.execute("CREATE INDEX IF NOT EXISTS entries_content ON entries(hash,size) WHERE deleted=0")
+        // A catalog written before replica IDs keeps counting under the device ID its clocks
+        // already use. A new one, or one replacing a lost catalog, gets an ID of its own.
+        try db.execute("CREATE TABLE IF NOT EXISTS replica(id INTEGER PRIMARY KEY,value TEXT NOT NULL)")
+        if let stored=try db.execute("SELECT value FROM replica WHERE id=1").first?["value"] as? String {replica=stored}
+        else {
+            let fresh=try db.execute("SELECT 1 FROM entries LIMIT 1").isEmpty ? UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased():device
+            try db.execute("INSERT INTO replica VALUES(1,?)",[fresh]);replica=fresh
+        }
         // The latest change per path is enough: version vectors retain causality.
         // Triggers commit the sequence together with the entry, including during scans.
         try db.transaction {
@@ -59,7 +73,7 @@ public final class SyncCatalog: @unchecked Sendable {
         let url=try store.safeURL(path)
         let previous=try entry(path)
         guard FileManager.default.fileExists(atPath:url.path) else {
-            if var old=previous,!old.deleted {old.deleted=true;old.hash="";old.size=0;old.clock[device,default:0]+=1;try put(old,seen:seen);return old};return previous
+            if var old=previous,!old.deleted {old.deleted=true;old.hash="";old.size=0;old.clock[replica,default:0]+=1;try put(old,seen:seen);return old};return previous
         }
         let v=try url.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey,.isRegularFileKey]);guard v.isRegularFile==true else{throw VaultError.message("Sync supports regular document files")}
         let size=v.fileSize ?? 0,mtime=v.contentModificationDate?.timeIntervalSince1970 ?? 0
@@ -68,10 +82,11 @@ public final class SyncCatalog: @unchecked Sendable {
         let hash=try Self.digest(url)
         let after=try URL(fileURLWithPath:url.path).resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey])
         guard after.fileSize==v.fileSize,after.contentModificationDate==v.contentModificationDate else {throw VaultError.message("A file changed while preparing sync. It will retry on the next pass.")}
-        var e=previous ?? SyncEntry(path:path,hash:hash,size:size,clock:[:]);if previous==nil||e.hash != hash||e.deleted {e.clock[device,default:0]+=1};e.hash=hash;e.size=size;e.deleted=false;try put(e,modified:mtime,seen:seen);return e
+        var e=previous ?? SyncEntry(path:path,hash:hash,size:size,clock:[:]);if previous==nil||e.hash != hash||e.deleted {e.clock[replica,default:0]+=1};e.hash=hash;e.size=size;e.deleted=false;try put(e,modified:mtime,seen:seen);return e
     }
     public func scan()throws {
         lock.lock();defer{lock.unlock()};if Date().timeIntervalSince(lastFullScan)<120{return};let generation=UUID().uuidString
+        removeStaleTransfers()
         var failed=false
         let keys:[URLResourceKey]=[.isDirectoryKey,.isSymbolicLinkKey,.isRegularFileKey,.fileSizeKey,.contentModificationDateKey]
         guard let iterator=FileManager.default.enumerator(at:store.root,includingPropertiesForKeys:keys,options:[],errorHandler:{_,_ in failed=true;return true})else{throw VaultError.message("Vault is not available for sync")}
@@ -101,6 +116,15 @@ public final class SyncCatalog: @unchecked Sendable {
         try flush();guard !failed else{throw VaultError.message("Some folders were unavailable. Sync paused to protect your files.")}
         for row in try db.execute("SELECT path FROM entries WHERE seen<>? AND deleted=0",[generation]) {let path=row["path"] as! String;if store.rules.includes(path){try observe(path,seen:generation)}}
         lastFullScan=Date()
+    }
+    /// An interrupted transfer resumes from its staged file, and every block received renews
+    /// that file's date. One untouched for a week belongs to a transfer that will not resume.
+    func removeStaleTransfers(now:Date=Date()) {
+        for (folder,kind) in [("sync/incoming","partial"),("sync/state-transfers","json")] {
+            for file in (try? FileManager.default.contentsOfDirectory(at:store.metadata.appendingPathComponent(folder),includingPropertiesForKeys:[.contentModificationDateKey])) ?? [] where file.pathExtension==kind {
+                if let modified=try? file.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,now.timeIntervalSince(modified)>7*86400 {try? FileManager.default.removeItem(at:file)}
+            }
+        }
     }
     public func invalidate(){lock.lock();lastFullScan = .distantPast;lock.unlock()}
     public func refresh(_ paths:[String])throws {lock.lock();defer{lock.unlock()};for path in paths {if store.rules.includes(path){try observe(path)}else if store.rules.includes(path,directory:true){lastFullScan = .distantPast}}}
@@ -150,7 +174,9 @@ public final class SyncCatalog: @unchecked Sendable {
         lock.lock();defer{lock.unlock()};guard allowed(remote) else{return false}
         let local=try observe(remote.path)
         if let local,local.hash==remote.hash,local.deleted==remote.deleted {var merged=local;merged.clock=local.merged(remote);if merged.clock != local.clock {try record(merged)};return false}
-        if let local,local.dominates(remote){return false}
+        // Equal clocks with different content mean neither side is newer (a catalog
+        // was reset or a device ID is shared): that is a conflict, never "up to date".
+        if let local,local.dominates(remote),!remote.dominates(local){return false}
         if remote.deleted {try apply(remote,temporary:nil);return false}
         // Reuse an already verified local copy when the same paper is filed in
         // more than one folder. Each destination remains an independent file.
@@ -165,11 +191,10 @@ public final class SyncCatalog: @unchecked Sendable {
     }
     public func staging(_ e:SyncEntry)throws->URL {
         guard allowed(e),!e.deleted else{throw VaultError.message("Invalid transfer")}
-        let folder=store.metadata.appendingPathComponent("sync/incoming");try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        let folder=store.metadata.appendingPathComponent("sync/incoming");try store.makeDirectory(folder)
         let url=folder.appendingPathComponent(VaultStore.fingerprint(Data((e.path+e.hash).utf8))+".partial")
         let partial=(try? FileManager.default.attributesOfItem(atPath:url.path)[.size] as? NSNumber)?.intValue ?? 0
-        let free=(try? FileManager.default.attributesOfFileSystem(forPath:folder.path)[.systemFreeSize] as? NSNumber)?.int64Value ?? Int64.max
-        guard Int64(max(0,e.size-partial))+64*1024*1024<free else{throw VaultError.message("Not enough free space to receive this document. Existing files are safe.")}
+        guard Int64(max(0,e.size-partial))+64*1024*1024<freeSpace(folder) else{throw VaultError.message("Not enough free space to receive this document. Existing files are safe.")}
 
         if (try? url.resourceValues(forKeys:[.fileSizeKey]).fileSize)==e.size,try Self.digest(url) != e.hash {let f=try FileHandle(forWritingTo:url);try f.truncate(atOffset:0);try f.close()}
         return url
@@ -179,12 +204,13 @@ public final class SyncCatalog: @unchecked Sendable {
         guard allowed(remote) else{throw VaultError.message("This peer offered an excluded or invalid document")}
         try store.withMutation {
             let local=try observe(remote.path)
-            if let local,local.dominates(remote),!(local.hash==remote.hash && local.deleted==remote.deleted){return}
+            if let local,local.dominates(remote),!remote.dominates(local),!(local.hash==remote.hash && local.deleted==remote.deleted){return}
             if let local,local.hash==remote.hash,local.deleted==remote.deleted {var merged=local;merged.clock=local.merged(remote);try record(merged);return}
             if !remote.deleted {guard let temporary,try Self.digest(temporary)==remote.hash,(try FileManager.default.attributesOfItem(atPath:temporary.path)[.size] as? NSNumber)?.intValue==remote.size else{throw VaultError.message("Transfer checksum did not match. Original document kept.")}}
             var final=remote
             if let local {final.clock=local.merged(remote)}
-            let concurrent=local.map{!remote.dominates($0)} ?? false
+            // Concurrent unless the remote is strictly newer; equal clocks reach here only with different content.
+            let concurrent=local.map{!remote.dominates($0) || $0.dominates(remote)} ?? false
             if concurrent,let local {
                 // Delete/edit conflicts keep the live document. Edit/edit conflicts choose
                 // a deterministic primary and retain the other as an ordinary visible file.
@@ -211,17 +237,22 @@ extension VaultStore {
     private func archiveForSync(_ path:String)throws {
         let url=try safeURL(path);guard FileManager.default.fileExists(atPath:url.path)else{return}
         let dir=metadata.appendingPathComponent("recovery/"+Self.fingerprint(Data(path.utf8)))
-        try FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true)
+        try makeDirectory(dir)
         try Data(path.utf8).write(to:dir.appendingPathComponent("path.txt"),options:.atomic)
         try FileManager.default.copyItem(at:url,to:dir.appendingPathComponent("\(Int(Date().timeIntervalSince1970*1000))-\(UUID().uuidString).snapshot"))
+        pruneSnapshots(dir)
     }
     func replaceFromSync(path:String,source:URL)throws {
         let target=try safeURL(path);try archiveForSync(path)
-        try FileManager.default.createDirectory(at:target.deletingLastPathComponent(),withIntermediateDirectories:true)
-        let staged=target.deletingLastPathComponent().appendingPathComponent(".archii-transfer-"+UUID().uuidString)
-        try FileManager.default.copyItem(at:source,to:staged);defer{try? FileManager.default.removeItem(at:staged)}
-        guard rename(staged.path,target.path)==0 else{throw VaultError.message("Could not install synced file; original retained")}
-        try refreshPaths([path])
+        try makeDirectory(target.deletingLastPathComponent())
+        // A document that is already here keeps its Finder tags and creation date. A new one, or a refused replacement, is renamed into place as before.
+        if !replaceKeepingMetadata(target,stage:{try FileManager.default.copyItem(at:source,to:$0)}) {
+            let staged=target.deletingLastPathComponent().appendingPathComponent(".archii-transfer-"+UUID().uuidString)
+            try FileManager.default.copyItem(at:source,to:staged);defer{try? FileManager.default.removeItem(at:staged)}
+            guard rename(staged.path,target.path)==0 else{throw VaultError.message("Could not install synced file; original retained")}
+        }
+        // The document is installed. A search index that cannot take it must not fail the transfer; the next scan indexes it.
+        try? refreshPaths([path])
     }
-    func removeFromSync(path:String)throws {try archiveForSync(path);let target=metadata.appendingPathComponent("trash/\(UUID().uuidString)/"+path);try FileManager.default.createDirectory(at:target.deletingLastPathComponent(),withIntermediateDirectories:true);try FileManager.default.moveItem(at:safeURL(path),to:target);try refreshPaths([path])}
+    func removeFromSync(path:String)throws {try archiveForSync(path);let target=metadata.appendingPathComponent("trash/\(UUID().uuidString)/"+path);try makeDirectory(target.deletingLastPathComponent());try FileManager.default.moveItem(at:safeURL(path),to:target);try refreshPaths([path])}
 }

@@ -42,10 +42,18 @@ final class DeviceSync: @unchecked Sendable {
         #if os(iOS)
         foregroundObserver=NotificationCenter.default.addObserver(forName:UIApplication.willEnterForegroundNotification,object:nil,queue:nil){[weak self] _ in self?.start()}
         #else
-        foregroundObserver=NotificationCenter.default.addObserver(forName:NSWorkspace.didWakeNotification,object:nil,queue:nil){[weak self] _ in self?.start()}
+        // Wake is posted on the workspace's own notification center, never the default one.
+        foregroundObserver=NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didWakeNotification,object:nil,queue:nil){[weak self] _ in self?.start()}
         #endif
     }
-    deinit {if let foregroundObserver{NotificationCenter.default.removeObserver(foregroundObserver)}}
+    deinit {
+        guard let foregroundObserver else{return}
+        #if os(iOS)
+        NotificationCenter.default.removeObserver(foregroundObserver)
+        #else
+        NSWorkspace.shared.notificationCenter.removeObserver(foregroundObserver)
+        #endif
+    }
     func start(){queue.async{[weak self] in self?.startOnQueue()}}
     func stop(){queue.async{[weak self] in self?.stopOnQueue()}}
     private func stopOnQueue(){generation=UUID();metadataBusy=[];listener?.cancel();browser?.cancel();timer?.cancel();listener=nil;browser=nil;timer=nil;channels.forEach{$0.close()};modelChannel?.close();modelChannel=nil;labChannel?.close();labChannel=nil;channels=[];endpoints=[:];busy=[]}
