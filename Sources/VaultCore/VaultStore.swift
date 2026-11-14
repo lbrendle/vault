@@ -58,6 +58,8 @@ public final class VaultStore: @unchecked Sendable {
     private let scanLock = NSLock()
     private let statusLock = NSLock()
     private var scanState: [String:Any] = ["running":false,"visited":0,"updated":0,"skippedDirectories":0]
+    /// Text up to this size is loaded into the editor and the full-text index. A property so a test need not write 64 MiB.
+    var textLimit = 64*1024*1024
     public init(root: URL, cache: URL) throws {
         guard let physical = realpath(root.path, nil) else { throw VaultError.message("Vault path is unavailable") }
         self.root = URL(fileURLWithPath:String(cString:physical),isDirectory:true)
@@ -88,6 +90,41 @@ public final class VaultStore: @unchecked Sendable {
             }
         }
         return url
+    }
+    /// Editable text carries a content revision; every other document is an attachment handled as a file.
+    static func isText(_ url:URL) -> Bool { ["md","markdown","txt","canvas","base"].contains(url.pathExtension.lowercased()) }
+    /// The vault folder is never created implicitly. After a rename, move or unmount a write must
+    /// fail: an empty folder at the old path would read as every document having been deleted.
+    func makeDirectory(_ url:URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath:root.path,isDirectory:&isDirectory), isDirectory.boolValue else { throw VaultError.message("The vault folder is unavailable. It may have been moved, renamed or disconnected; reopen it to continue.") }
+        try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)
+    }
+    /// Replaces an existing document with finished bytes in one step, using the system's safe
+    /// save: Finder tags, comments, other lasting attributes and the creation date stay with the
+    /// document, and only attributes that describe the old bytes are dropped. Returns false when
+    /// there is nothing to replace or the replacement is refused (a locked file, a volume without
+    /// support), so the caller writes the plain atomic way. Nothing is left in the folder.
+    func replaceKeepingMetadata(_ target:URL,stage:(URL) throws -> Void) -> Bool {
+        guard (try? target.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true else { return false }
+        let staged=target.deletingLastPathComponent().appendingPathComponent(".archii-transfer-"+UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:staged) }
+        do { try stage(staged); _ = try FileManager.default.replaceItemAt(target,withItemAt:staged); return true } catch { return false }
+    }
+    /// The app lists the newest 100 versions of a document. Older `.snapshot` files in that
+    /// document's recovery folder cannot be reached from it and are removed; nothing else is.
+    static let snapshotLimit = 100
+    private func snapshots(in dir:URL) -> [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at:dir,includingPropertiesForKeys:[.fileSizeKey])) ?? []).filter{$0.pathExtension=="snapshot"}.sorted{$0.lastPathComponent>$1.lastPathComponent}
+    }
+    func pruneSnapshots(_ dir:URL) { for old in snapshots(in:dir).dropFirst(Self.snapshotLimit) { try? FileManager.default.removeItem(at:old) } }
+    /// A changed path that is a folder now, or was one that still holds indexed documents. A folder
+    /// renamed, moved or removed in Finder is reported once, with no event for the documents inside.
+    public func isFolder(_ path:String) -> Bool {
+        guard rules.includes(path,directory:true), !rules.includes(path) else { return false }
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath:root.appendingPathComponent(path).path,isDirectory:&isDirectory) { return isDirectory.boolValue }
+        return !((try? db.execute("SELECT 1 FROM docs WHERE parent=? OR (parent>? AND parent<?) LIMIT 1",[path,path+"/",path+"0"])) ?? []).isEmpty
     }
     public func status() -> [String:Any] {
         statusLock.lock(); var out=scanState; statusLock.unlock()
@@ -149,10 +186,9 @@ public final class VaultStore: @unchecked Sendable {
     private func index(path:String,url:URL,size:Int,modified:Double,generation:Int) throws {
         let ext=url.pathExtension.lowercased()
         var body=""
-        if ["md","markdown","txt","canvas","base"].contains(ext) {
-            guard size <= 64*1024*1024 else { throw VaultError.message("Text larger than 64 MiB requires a streaming reader; kept on disk") }
-            body=(try? String(contentsOf:url,encoding:.utf8)) ?? ""
-        }
+        // Text over the editor limit is still a document: listed, found by name, synced and opened
+        // natively. Only its content stays out of the index, so a scan that meets one is complete.
+        if ["md","markdown","txt","canvas","base"].contains(ext), size <= textLimit { body=(try? String(contentsOf:url,encoding:.utf8)) ?? "" }
         if ext=="ipynb",size<=64*1024*1024,let data=try? Data(contentsOf:url),let book=try? JSONSerialization.jsonObject(with:data) as? [String:Any],let cells=book["cells"] as? [[String:Any]] {
             body=cells.filter{$0["cell_type"] as? String=="markdown"}.compactMap{cell in (cell["source"] as? String) ?? (cell["source"] as? [String])?.joined()}.joined(separator:"\n\n")
         }
@@ -223,8 +259,8 @@ public final class VaultStore: @unchecked Sendable {
     public func read(_ path:String) throws -> [String:Any] {
         let url=try safeURL(path), values=try url.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey])
         var out:[String:Any]=["path":path,"title":url.deletingPathExtension().lastPathComponent,"ext":url.pathExtension.lowercased(),"size":values.fileSize ?? 0]
-        if ["md","markdown","txt","canvas","base"].contains(url.pathExtension.lowercased()) {
-            guard (values.fileSize ?? 0)<64*1024*1024 else {throw VaultError.message("This text exceeds the current 64 MiB editor limit")}
+        if Self.isText(url) {
+            guard (values.fileSize ?? 0)<textLimit else {throw VaultError.message("This text exceeds the current 64 MiB editor limit")}
             let data=try Data(contentsOf:url); guard let content=String(data:data,encoding:.utf8) else {throw VaultError.message("This document is not UTF-8")}
             out["content"]=content; out["revision"]=Self.fingerprint(data)
         }
@@ -247,7 +283,7 @@ public final class VaultStore: @unchecked Sendable {
     public func save(_ path:String,content:String,revision:String?) throws -> [String:Any] {
         mutationLock.lock(); defer {mutationLock.unlock()}
         let url=try safeURL(path)
-        guard ["md","markdown","txt","canvas","base"].contains(url.pathExtension.lowercased()) else {throw VaultError.message("This format is read-only")}
+        guard Self.isText(url) else {throw VaultError.message("This format is read-only")}
         let fm=FileManager.default
         if fm.fileExists(atPath:url.path) {
             let old=try Data(contentsOf:url)
@@ -255,22 +291,25 @@ public final class VaultStore: @unchecked Sendable {
             if old==Data(content.utf8) {return try read(path)}
             try snapshot(path,data:old)
         } else if revision != nil {throw VaultError.message("This file was moved or deleted outside Vault. Save your draft as a new note.")}
-        try fm.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true)
-        try Data(content.utf8).write(to:url,options:.atomic)
+        try makeDirectory(url.deletingLastPathComponent())
+        let bytes=Data(content.utf8)
+        // An existing note keeps its Finder tags and creation date; a new one, or a refused replacement, is written atomically as before.
+        if !replaceKeepingMetadata(url,stage:{try bytes.write(to:$0)}) {try bytes.write(to:url,options:.atomic)}
         let v=try url.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey])
         try db.transaction {try index(path:path,url:url,size:v.fileSize ?? 0,modified:v.contentModificationDate!.timeIntervalSince1970,generation:try nextGeneration())}
         return try read(path)
     }
     private func snapshot(_ path:String,data:Data) throws {
         let dir=metadata.appendingPathComponent("recovery").appendingPathComponent(Self.fingerprint(Data(path.utf8)))
-        try FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true)
+        try makeDirectory(dir)
         try Data(path.utf8).write(to:dir.appendingPathComponent("path.txt"),options:.atomic)
         try data.write(to:dir.appendingPathComponent("\(Int(Date().timeIntervalSince1970*1000))-\(UUID().uuidString).snapshot"),options:.atomic)
+        pruneSnapshots(dir)
     }
     public func recovery(_ path:String) throws -> [[String:Any]] {
         _ = try safeURL(path)
         let dir=metadata.appendingPathComponent("recovery").appendingPathComponent(Self.fingerprint(Data(path.utf8)))
-        return ((try? FileManager.default.contentsOfDirectory(at:dir,includingPropertiesForKeys:[.fileSizeKey])) ?? []).filter{$0.pathExtension=="snapshot"}.sorted{$0.lastPathComponent>$1.lastPathComponent}.prefix(100).map{["id":$0.lastPathComponent,"size":(try? $0.resourceValues(forKeys:[.fileSizeKey]).fileSize) ?? 0]}
+        return snapshots(in:dir).prefix(Self.snapshotLimit).map{["id":$0.lastPathComponent,"size":(try? $0.resourceValues(forKeys:[.fileSizeKey]).fileSize) ?? 0]}
     }
     public func recoveryRead(_ path:String,id:String) throws -> String {
         _ = try safeURL(path); guard id==URL(fileURLWithPath:id).lastPathComponent, id.hasSuffix(".snapshot") else {throw VaultError.message("Invalid snapshot")}
@@ -278,11 +317,17 @@ public final class VaultStore: @unchecked Sendable {
     }
     public func trash(_ path:String,revision:String?) throws {
         mutationLock.lock();defer{mutationLock.unlock()}
-        let url=try safeURL(path); let data=try Data(contentsOf:url)
-        guard revision==Self.fingerprint(data) else {throw VaultError.message("File changed; reload before deleting")}
-        try snapshot(path,data:data)
+        let url=try safeURL(path)
+        if Self.isText(url) {
+            let data=try Data(contentsOf:url)
+            guard revision==Self.fingerprint(data) else {throw VaultError.message("File changed; reload before deleting")}
+            try snapshot(path,data:data)
+        } else {
+            // An attachment has no revision and can exceed memory. It is never read: the trashed file is its recoverable copy.
+            guard try url.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile==true else {throw VaultError.message("Only a document can be moved to trash")}
+        }
         let target=metadata.appendingPathComponent("trash/\(UUID().uuidString)/\(path)")
-        try FileManager.default.createDirectory(at:target.deletingLastPathComponent(),withIntermediateDirectories:true)
+        try makeDirectory(target.deletingLastPathComponent())
         try FileManager.default.moveItem(at:url,to:target)
         try db.transaction {try db.execute("DELETE FROM links WHERE source=?",[path]);try db.execute("DELETE FROM tags WHERE source=?",[path]);try db.execute("DELETE FROM docs WHERE path=?",[path])}
     }
@@ -335,7 +380,7 @@ public final class VaultStore: @unchecked Sendable {
     }
     public func saveState(_ value:[String:Any]) throws {
         mutationLock.lock();defer{mutationLock.unlock()}
-        try FileManager.default.createDirectory(at:metadata,withIntermediateDirectories:true)
+        try makeDirectory(metadata)
         var merged=sharedMerge(local:try state(),remote:value)
         for (key,item) in value where !["chats","bookmarks","bookmarkChanges"].contains(key){merged[key]=item}
         let data=try JSONSerialization.data(withJSONObject:merged,options:[.prettyPrinted,.sortedKeys])
@@ -343,16 +388,22 @@ public final class VaultStore: @unchecked Sendable {
     }
     public func saveRules(_ value:VaultRules) throws {
         mutationLock.lock();defer{mutationLock.unlock()}
-        try FileManager.default.createDirectory(at:metadata,withIntermediateDirectories:true)
+        try makeDirectory(metadata)
         try JSONEncoder().encode(value).write(to:metadata.appendingPathComponent("rules.json"),options:.atomic);rules=value
     }
     public func move(_ source:String,to destination:String,revision:String) throws -> [String:Any] {
         mutationLock.lock();defer{mutationLock.unlock()}
         let original=try safeURL(source),target=try safeURL(destination)
         guard !FileManager.default.fileExists(atPath:target.path) else{throw VaultError.message("A document already exists at the destination")}
-        let initial=try Data(contentsOf:original)
-        guard Self.fingerprint(initial)==revision else{throw VaultError.message("The document changed outside Vault; reload before moving it")}
-        guard ["md","markdown","canvas","base","txt"].contains(original.pathExtension) else{throw VaultError.message("Attachment moves are not yet supported")}
+        let text=Self.isText(original)
+        guard text==Self.isText(target) else{throw VaultError.message(text ? "A text document must keep a text extension (md, markdown, txt, canvas or base) when it is moved":"An attachment cannot be given a text document extension")}
+        // Text must match the revision that was read. An attachment has none and is never loaded into memory.
+        var initial:Data?
+        if text {
+            let data=try Data(contentsOf:original)
+            guard Self.fingerprint(data)==revision else{throw VaultError.message("The document changed outside Vault; reload before moving it")}
+            initial=data
+        } else {guard try original.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile==true else{throw VaultError.message("Only a document can be moved")}}
         let referers=try backlinks(source).compactMap{$0["path"] as? String}
         var edits=[(String,String,String)]()
         let re=try NSRegularExpression(pattern:#"\[\[([^\]\n]+)\]\]|\]\(([^\)\n]+)\)"#)
@@ -383,11 +434,11 @@ public final class VaultStore: @unchecked Sendable {
             if updated != text {edits.append((path,updated,rev))}
         }
         // Preserve every source before performing any move or link rewrite.
-        try snapshot(source,data:initial)
+        if let initial {try snapshot(source,data:initial)}
         for (path,_,rev) in edits where path != source {
             let data=try Data(contentsOf:safeURL(path));guard Self.fingerprint(data)==rev else{throw VaultError.message("A referring document changed; no move was performed")};try snapshot(path,data:data)
         }
-        try FileManager.default.createDirectory(at:target.deletingLastPathComponent(),withIntermediateDirectories:true)
+        try makeDirectory(target.deletingLastPathComponent())
         try FileManager.default.moveItem(at:original,to:target)
         var completed=[(String,Data,String)]()
         do {
@@ -427,5 +478,5 @@ public final class VaultStore: @unchecked Sendable {
             }
         }
     }
-    public func folder(_ path:String) throws {let url=try safeURL(path,requireDocument:false);try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)}
+    public func folder(_ path:String) throws {let url=try safeURL(path,requireDocument:false);try makeDirectory(url)}
 }

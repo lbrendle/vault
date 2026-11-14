@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 import {markdownHTML} from './markdownParser';
-export {frontmatter,updateProperties} from './markdownParser';
+export {frontmatter,updateProperties,toggleTask} from './markdownParser';
 export function markdownFragment(html){
  const fragment=DOMPurify.sanitize(html,{RETURN_DOM_FRAGMENT:true,FORBID_TAGS:['iframe','form','object','embed','style','script'],ADD_ATTR:['data-wiki','data-embed'],ALLOW_DATA_ATTR:true});
  let taskIndex=0;

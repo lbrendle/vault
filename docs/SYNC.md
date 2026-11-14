@@ -8,7 +8,7 @@ Paired devices discover each other with Bonjour on the same local network, authe
 
 A saved change gets a content fingerprint and a version record. Peers compare their journals, transfer changed content, verify it, and apply it atomically. This operates in both directions. If a file changes while it is being transferred, the journal detects the newer version for a later pass. If two devices edit independently, Vault preserves a visible conflict copy rather than silently choosing a winner. Review and merge conflict copies yourself.
 
-Saved conversations and bookmarks use shared vault state and travel through sync too. Deletions are recorded and propagated; recovery copies are kept in the vault's hidden recovery area. Keep independent backups because sync also distributes unwanted edits and deletions.
+Saved conversations and bookmarks use shared vault state and travel through sync too. Deletions are recorded and propagated; recovery copies, the newest 100 for each document, are kept in the vault's hidden recovery area. Keep independent backups because sync also distributes unwanted edits and deletions.
 
 ## Offline and interruptions
 

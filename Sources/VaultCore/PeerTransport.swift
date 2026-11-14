@@ -37,6 +37,12 @@ private final class PeerDeadline: @unchecked Sendable {
     func fire(_ cancel:()->Void) {lock.lock();guard !finished else{lock.unlock();return};expired=true;finished=true;lock.unlock();cancel()}
     func finish()->Bool {lock.lock();defer{lock.unlock()};finished=true;return expired}
 }
+/// The other device answered a request by declining it. The connection is intact, unlike a
+/// timeout or a dropped link, so a sync pass can go on to the next document.
+public struct PeerRefusal:LocalizedError {
+    public let message:String
+    public var errorDescription:String? {message}
+}
 public final class PeerChannel: @unchecked Sendable {
     public let connection:NWConnection
     private let queue=DispatchQueue(label:"vault.peer.transport",qos:.utility)
@@ -114,7 +120,7 @@ public final class PeerChannel: @unchecked Sendable {
         defer{timer.cancel();_ = deadline.finish()}
         do {
             try await send(["command":command,"args":args]);let response=try await receive()
-            if let error=response["error"] as? String{throw VaultError.message(error)};return response
+            if let error=response["error"] as? String{throw PeerRefusal(message:error)};return response
         }catch {
             if deadline.finish(){throw VaultError.message("The other device stopped responding. Sync will reconnect and resume.")}
             throw error
@@ -132,7 +138,7 @@ public final class PeerTransfer: @unchecked Sendable {
     private func entry(_ args:[String:Any])throws->SyncEntry {try JSONDecoder().decode(SyncEntry.self,from:JSONSerialization.data(withJSONObject:args))}
     private func stateURL(_ id:String)throws->URL {
         guard UUID(uuidString:id) != nil else{throw VaultError.message("Invalid state transfer")}
-        let dir=catalog.store.metadata.appendingPathComponent("sync/state-transfers");try FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true)
+        let dir=catalog.store.metadata.appendingPathComponent("sync/state-transfers");try catalog.store.makeDirectory(dir)
         return dir.appendingPathComponent(id+".json")
     }
     private func smallData(_ e:SyncEntry)throws->Data {
@@ -205,7 +211,8 @@ public final class PeerTransfer: @unchecked Sendable {
         case "put":
             guard let raw=args["entry"] as? [String:Any],let data=Data(base64Encoded:args["data"] as? String ?? ""),data.count<=1024*1024 else{throw VaultError.message("Invalid file block")}
             let e=try entry(raw),offset=args["offset"] as? Int ?? -1;let url=try catalog.staging(e)
-            guard offset>=0,offset+data.count<=e.size else{throw VaultError.message("Invalid transfer offset")}
+            // Subtract instead of adding: an offset from the wire can be large enough to overflow.
+            guard offset>=0,e.size>=data.count,offset<=e.size-data.count else{throw VaultError.message("Invalid transfer offset")}
             if !FileManager.default.fileExists(atPath:url.path){FileManager.default.createFile(atPath:url.path,contents:Data())}
             let f=try FileHandle(forWritingTo:url);defer{try? f.close()}
             guard try f.seekToEnd()==UInt64(offset)else{throw VaultError.message("Transfer offset changed")};try f.write(contentsOf:data)
@@ -227,7 +234,7 @@ public final class PeerTransfer: @unchecked Sendable {
             let id=UUID().uuidString;try Data().write(to:stateURL(id));return ["id":id]
         case "statePut":
             let id=args["id"] as? String ?? "",offset=args["offset"] as? Int ?? -1
-            guard offset>=0,let d=Data(base64Encoded:args["data"] as? String ?? ""),d.count<=128*1024,offset+d.count<=256*1024*1024 else{throw VaultError.message("Invalid state block")}
+            guard offset>=0,let d=Data(base64Encoded:args["data"] as? String ?? ""),d.count<=128*1024,offset<=256*1024*1024-d.count else{throw VaultError.message("Invalid state block")}
             let f=try FileHandle(forWritingTo:stateURL(id));defer{try? f.close()};guard try f.seekToEnd()==UInt64(offset)else{throw VaultError.message("Invalid state offset")};try f.write(contentsOf:d);return ["ok":true]
         case "stateCommit":
             let url=try stateURL(args["id"] as? String ?? "");defer{try? FileManager.default.removeItem(at:url)}
@@ -258,12 +265,18 @@ public final class PeerTransfer: @unchecked Sendable {
             guard remoteAfter<=remoteThrough else{throw VaultError.message("The remote change journal moved backwards")}
         }
         var cursor="",more=true,received=0,sent=0
+        // A document this device cannot take (no room, a failed checksum, a path it has to
+        // refuse) is put off rather than ending the pass: the rest is still received and this
+        // device's own changes are still sent. The first such failure is reported once the pass
+        // is over. Anything wrong with the connection or the peer's replies ends the pass as before.
+        var postponed:Error?
         while more {
             let response=try await (delta ? channel.request("journalChanges",["epoch":remoteEpoch,"after":remoteAfter,"through":remoteThrough]):channel.request("manifest",["after":cursor,"force":forceScan && cursor.isEmpty]))
             var pending=[SyncEntry]()
             for raw in response["entries"] as? [[String:Any]] ?? [] {
-                let e=try entry(raw),was=try catalog.entry(e.path)
-                if try catalog.needs(e){pending.append(e)}else if e.deleted,was?.deleted==false{onChange([e.path])}
+                let e=try entry(raw)
+                do {let was=try catalog.entry(e.path);if try catalog.needs(e){pending.append(e)}else if e.deleted,was?.deleted==false{onChange([e.path])}}
+                catch{postponed=postponed ?? error}
             }
             if batches {
                 let small=pending.filter{!$0.deleted && $0.size<=24*1024}
@@ -271,33 +284,39 @@ public final class PeerTransfer: @unchecked Sendable {
                     let group=Array(small[start..<min(start+8,small.count)])
                     let reply=try await channel.request("getSmallBatch",["entries":try group.map(json)])
                     guard let files=reply["files"] as? [[String:Any]],files.count==group.count else{throw VaultError.message("Incomplete document batch")}
+                    var installed=[String]()
                     for (raw,e) in zip(files,group) {
                         guard let value=raw["entry"] as? [String:Any],try entry(value)==e,let data=Data(base64Encoded:raw["data"] as? String ?? "") else{throw VaultError.message("Unexpected document batch")}
-                        try applySmall(e,data:data);received+=1
+                        do {try applySmall(e,data:data);received+=1;installed.append(e.path)}catch{postponed=postponed ?? error}
                     }
-                    onChange(group.map{$0.path});onProgress("Received \(received) documents")
+                    if !installed.isEmpty {onChange(installed)};onProgress("Received \(received) documents")
                 }
                 pending.removeAll{!$0.deleted && $0.size<=24*1024}
             }
             for e in pending {
-                let url=try catalog.staging(e);if !FileManager.default.fileExists(atPath:url.path){FileManager.default.createFile(atPath:url.path,contents:Data())}
-                let f=try FileHandle(forWritingTo:url)
                 do {
-                    var offset=Int(try f.seekToEnd());if offset>e.size{try f.truncate(atOffset:0);offset=0}
-                    while offset<e.size {
-                        onProgress("Receiving \(e.path) · \(e.size==0 ? 100:offset*100/e.size)%")
-                        let reply=try await channel.request("get",["path":e.path,"hash":e.hash,"offset":offset,"length":blockSize])
-                        guard let d=Data(base64Encoded:reply["data"] as? String ?? ""),!d.isEmpty,offset+d.count<=e.size else{throw VaultError.message("Incomplete transfer; will resume")}
-                        try f.write(contentsOf:d);offset+=d.count
-                    }
-                    try f.synchronize();try f.close();try catalog.apply(e,temporary:url);try? FileManager.default.removeItem(at:url);received+=1;onChange([e.path])
-                }catch{try? f.close();throw error}
+                    let url=try onThisDevice{try catalog.staging(e)};if !FileManager.default.fileExists(atPath:url.path){FileManager.default.createFile(atPath:url.path,contents:Data())}
+                    let f=try onThisDevice{try FileHandle(forWritingTo:url)}
+                    do {
+                        var offset=Int(try onThisDevice{try f.seekToEnd()});if offset>e.size{try onThisDevice{try f.truncate(atOffset:0)};offset=0}
+                        while offset<e.size {
+                            onProgress("Receiving \(e.path) · \(e.size==0 ? 100:offset*100/e.size)%")
+                            let reply=try await channel.request("get",["path":e.path,"hash":e.hash,"offset":offset,"length":blockSize])
+                            guard let d=Data(base64Encoded:reply["data"] as? String ?? ""),!d.isEmpty,offset+d.count<=e.size else{throw VaultError.message("Incomplete transfer; will resume")}
+                            try onThisDevice{try f.write(contentsOf:d)};offset+=d.count
+                        }
+                        try onThisDevice{try f.synchronize()};try onThisDevice{try f.close()};try onThisDevice{try catalog.apply(e,temporary:url)}
+                        try? FileManager.default.removeItem(at:url);received+=1;onChange([e.path])
+                    }catch{try? f.close();throw error}
+                }catch let failure as Postponed{postponed=postponed ?? failure.reason}
             }
             more=response["more"] as? Bool ?? false;cursor=response["cursor"] as? String ?? ""
             if delta {
                 guard let next=response["cursor"] as? Int,next>=remoteAfter,next<=remoteThrough,(!more || next>remoteAfter) else{throw VaultError.message("Invalid change page")}
-                // Only advance after every file in this page has been verified/applied.
-                try catalog.acknowledge(remoteDevice,epoch:remoteEpoch,sequence:next);remoteAfter=next
+                // Only advance after every file up to here has been verified/applied. Once a
+                // document is put off, the stored cursor stays behind it so a later pass is
+                // offered it again; this pass reads on without acknowledging.
+                if postponed==nil {try catalog.acknowledge(remoteDevice,epoch:remoteEpoch,sequence:next)};remoteAfter=next
             }
             try await synchronizeState(channel)
         }
@@ -308,40 +327,76 @@ public final class PeerTransfer: @unchecked Sendable {
             let reply=try await channel.request("journalCursor",["device":catalog.device,"epoch":localHead.epoch])
             guard let sequence=reply["sequence"] as? Int,sequence>=0,sequence<=localHead.sequence else{throw VaultError.message("Invalid peer change cursor")};localAfter=sequence
         }
+        // Sending mirrors receiving. A document the other device declines (no room there, a path it
+        // has to refuse, a failed checksum) or that this device cannot read is put off: the rest is
+        // still sent and the first such failure is reported once the pass is over. A page or a batch
+        // that is declined as a whole is offered again one document at a time to find the one at fault.
+        // A dropped or silent connection is not a refusal and ends the pass as before.
+        var unsent:Error?
+        func putOff(_ e:SyncEntry,_ error:Error,declined:Bool) {
+            unsent=unsent ?? VaultError.message((declined ? "The other device could not accept ":"Could not send ")+e.path+": "+error.localizedDescription)
+        }
+        func offer(_ entries:[SyncEntry])async throws->Set<String> {
+            Set(try await channel.request("offers",["entries":try entries.map(json)])["needs"] as? [String] ?? [])
+        }
         repeat {
             let batch:[SyncEntry]
             if delta {let page=try catalog.journalChanges(after:localAfter,through:localHead.sequence);batch=page.entries;more=page.more;localAfter=page.cursor}
             else {batch=try catalog.manifest(after:cursor);more=batch.count==128;cursor=batch.last?.path ?? ""}
             let allowed=batch.filter(catalog.allowed)
-            let response=try await channel.request("offers",["entries":try allowed.map(json)]),needed=Set(response["needs"] as? [String] ?? [])
+            var needed=Set<String>()
+            do {needed=try await offer(allowed)}
+            catch is PeerRefusal {
+                for e in allowed {do {needed.formUnion(try await offer([e]))}catch let refusal as PeerRefusal{putOff(e,refusal,declined:true)}}
+            }
             var outgoing=allowed.filter{needed.contains($0.path) && !$0.deleted}
             if batches {
                 let small=outgoing.filter{$0.size<=24*1024}
                 for start in stride(from:0,to:small.count,by:8) {
-                    let group=Array(small[start..<min(start+8,small.count)])
-                    let files=try group.map { e -> [String:Any] in ["entry":try json(e),"data":try smallData(e).base64EncodedString()] }
-                    _ = try await channel.request("putSmallBatch",["files":files]);sent+=group.count;onProgress("Sent \(sent) documents")
+                    var group=[SyncEntry](),files=[[String:Any]]()
+                    for e in small[start..<min(start+8,small.count)] {
+                        do {files.append(["entry":try json(e),"data":try smallData(e).base64EncodedString()]);group.append(e)}catch{putOff(e,error,declined:false)}
+                    }
+                    if files.isEmpty {continue}
+                    do {_ = try await channel.request("putSmallBatch",["files":files]);sent+=group.count}
+                    catch is PeerRefusal {
+                        for (e,file) in zip(group,files) {
+                            do {_ = try await channel.request("putSmallBatch",["files":[file]]);sent+=1}catch let refusal as PeerRefusal{putOff(e,refusal,declined:true)}
+                        }
+                    }
+                    onProgress("Sent \(sent) documents")
                 }
                 outgoing.removeAll{$0.size<=24*1024}
             }
             for e in outgoing {
-                let raw=try json(e),reply=try await channel.request("begin",raw)
-                var offset=reply["offset"] as? Int ?? 0;guard offset>=0,offset<=e.size else{throw VaultError.message("Invalid peer offset")}
-                let f=try FileHandle(forReadingFrom:catalog.store.safeURL(e.path));defer{try? f.close()};try f.seek(toOffset:UInt64(offset))
-                while offset<e.size {
-                    onProgress("Sending \(e.path) · \(offset*100/max(1,e.size))%")
-                    guard let d=try f.read(upToCount:blockSize),!d.isEmpty else{throw VaultError.message("Document changed during transfer")}
-                    _ = try await channel.request("put",["entry":raw,"offset":offset,"data":d.base64EncodedString()]);offset+=d.count
+                do {
+                    let raw=try json(e),reply=try await channel.request("begin",raw)
+                    var offset=reply["offset"] as? Int ?? 0;guard offset>=0,offset<=e.size else{throw VaultError.message("Invalid peer offset")}
+                    let f=try onThisDevice{try FileHandle(forReadingFrom:catalog.store.safeURL(e.path))};defer{try? f.close()};try onThisDevice{try f.seek(toOffset:UInt64(offset))}
+                    while offset<e.size {
+                        onProgress("Sending \(e.path) · \(offset*100/max(1,e.size))%")
+                        guard let d=try onThisDevice({try f.read(upToCount:blockSize)}),!d.isEmpty else{throw Postponed(reason:VaultError.message("Document changed during transfer"))}
+                        _ = try await channel.request("put",["entry":raw,"offset":offset,"data":d.base64EncodedString()]);offset+=d.count
+                    }
+                    _ = try await channel.request("finish",raw);sent+=1
                 }
-                _ = try await channel.request("finish",raw);sent+=1
+                catch let refusal as PeerRefusal{putOff(e,refusal,declined:true)}
+                catch let failure as Postponed{putOff(e,failure.reason,declined:false)}
             }
-            if delta {_ = try await channel.request("journalAcknowledge",["device":catalog.device,"epoch":localHead.epoch,"sequence":localAfter])}
+            // As when receiving, the other device's record of how far it has read this journal stays
+            // behind a document that was put off, so a later pass offers it again.
+            if delta,unsent==nil {_ = try await channel.request("journalAcknowledge",["device":catalog.device,"epoch":localHead.epoch,"sequence":localAfter])}
             try await synchronizeState(channel)
         }while more
         try await synchronizeState(channel)
+        if let failure=postponed ?? unsent {throw failure}
         _ = try? await channel.request("syncComplete")
         onProgress("Up to date · \(received) received, \(sent) sent")
     }
+    /// Marks a failure that belongs to one incoming document on this device (staging, writing or
+    /// installing it), as distinct from a failed request to the peer in the same loop.
+    private struct Postponed:Error {let reason:Error}
+    private func onThisDevice<T>(_ work:()throws->T)throws->T {do{return try work()}catch{throw Postponed(reason:error)}}
     public func synchronizeState(_ channel:PeerChannel)async throws {
         let data=try JSONSerialization.data(withJSONObject:catalog.store.sharedState(),options:.sortedKeys)
         let digest=try await channel.request("stateDigest")
@@ -376,7 +431,10 @@ extension VaultStore {
                     branch["id"]=branchID;branch["title"]=(branch["title"] as? String ?? "Conversation")+" · sync copy"
                     if !chats.contains(where:{$0["id"] as? String==branchID}){chats.append(branch)}
                 }
-                if useIncoming {chats[i]=incoming}
+                var kept=useIncoming ? incoming:current
+                // One list continues the other: keep every message under the newer side's title, archive flag and timestamp.
+                if prefix,old.count != new.count {kept["messages"]=(new.count>old.count ? incoming:current)["messages"]}
+                chats[i]=kept
             }else{chats.append(incoming)}
         }
         local["chats"]=chats.sorted{(($0["updated"] as? Double) ?? 0)>(($1["updated"] as? Double) ?? 0)}

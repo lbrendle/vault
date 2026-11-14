@@ -4,7 +4,7 @@ import taskLists from 'markdown-it-task-lists';
 import mark from 'markdown-it-mark';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
-import {parse, stringify} from 'yaml';
+import {parse, parseDocument, stringify, isMap, isScalar} from 'yaml';
 export const md=new MarkdownIt({html:true,linkify:true,breaks:true,typographer:false}).use(footnote).use(taskLists).use(mark).use(texmath,{engine:katex,delimiters:'dollars',katexOptions:{trust:false,throwOnError:false}});
 // Bare code filenames are local references, even when their extension is a
 // real top-level domain (for example .py, .rs, or .sh). Explicit web URLs stay web URLs.
@@ -62,9 +62,44 @@ export function frontmatter(content=''){
  if(!m)return {properties:{},body:content,raw:''};
  try{return {properties:parse(m[1])||{},body:content.slice(m[0].length),raw:m[1]}}catch(error){return {properties:{},body:content,raw:m[1],error:error.message}}
 }
-export function updateProperties(content,properties){const parsed=frontmatter(content);if(parsed.error)throw new Error('Fix the YAML syntax in source mode before editing properties.');return '---\n'+stringify(properties).trimEnd()+'\n---\n\n'+parsed.body.replace(/^\n+/,'');}
+// Rewrites only the properties that changed, by splicing the frontmatter's own text. Every other key keeps
+// its source exactly, so `id: 007`, `version: 1.10`, long numbers, quoting, order and comments survive an edit
+// elsewhere. Frontmatter that is not a plain block of `key: value` lines is regenerated whole, as before.
+export function updateProperties(content,properties){
+ const parsed=frontmatter(content);if(parsed.error)throw new Error('Fix the YAML syntax in source mode before editing properties.');
+ properties=Object.fromEntries(Object.entries(properties).filter(([,value])=>value!==undefined)); // an undefined value means the property is absent
+ const before=parsed.properties,document=parseDocument(parsed.raw),map=document.contents,write=(key,value)=>stringify({[key]:value}).trimEnd();
+ const spliceable=!document.errors.length&&isMap(map)&&!map.flow&&map.items.every(pair=>isScalar(pair.key)&&pair.key.range);
+ let text=parsed.raw;
+ if(!spliceable)text=stringify(properties);
+ else{
+  const edits=[];
+  for(const pair of map.items){
+   const key=String(pair.key.value),start=pair.key.range[0];let end=pair.value?.range?pair.value.range[2]:pair.key.range[2];
+   if(text[end-1]!=='\n'){const newline=text.indexOf('\n',end);end=newline<0?text.length:newline+1}
+   if(!(key in properties))edits.push([start,end,'']);
+   else if(JSON.stringify(before[key])!==JSON.stringify(properties[key]))edits.push([start,end,write(key,properties[key])+(text[end-1]==='\n'?'\n':'')]);
+  }
+  for(const [start,end,replacement] of edits.reverse())text=text.slice(0,start)+replacement+text.slice(end);
+  for(const [key,value] of Object.entries(properties))if(!(key in before))text=(text.trimEnd()?text.trimEnd()+'\n':'')+write(key,value);
+ }
+ return '---\n'+text.trimEnd()+'\n---\n\n'+parsed.body.replace(/^\n+/,'');
+}
+// Sets or clears the checkbox on one source line (0-based, counted from the top of the file).
+// A line that is not a task leaves the content untouched.
+export function toggleTask(content,line,checked){
+ const lines=content.split('\n'),task=/^(\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+)\[[ xX]\]/;
+ if(!Number.isInteger(line)||line<0||line>=lines.length||!task.test(lines[line]))return content;
+ lines[line]=lines[line].replace(task,(match,prefix)=>prefix+'['+(checked?'x':' ')+']');
+ return lines.join('\n');
+}
 
-export function parseMarkdown(content,options={}){const {body}=frontmatter(content),env={chat:options.chat===true},tokens=md.parse(body,env);let task=0;for(const token of tokens)for(const child of token.children||[])if(child.type==='html_inline'&&child.content.includes('task-list-item-checkbox'))child.content=child.content.replace('<input ',`<input data-task-source="${task++}" `);return {tokens,env}}
+export function parseMarkdown(content,options={}){const {body}=frontmatter(content),env={chat:options.chat===true},tokens=md.parse(body,env);
+ // Each task checkbox carries the source line it was written on (see toggleTask), not its position among
+ // rendered checkboxes: fenced examples, numbered and quoted tasks make those two counts disagree.
+ const firstLine=content.slice(0,content.length-body.length).split('\n').length-1;
+ for(const token of tokens)for(const child of token.children||[])if(child.type==='html_inline'&&child.content.includes('task-list-item-checkbox'))child.content=child.content.replace('<input ',`<input data-task-source="${firstLine+(token.map?token.map[0]:-1)}" `);
+ return {tokens,env}}
 export function markdownHTML(content,options){const {tokens,env}=parseMarkdown(content,options);return md.renderer.render(tokens,md.options,env)}
 export function markdownSections(content,budget=16000,options){
  const {tokens,env}=parseMarkdown(content,options),sections=[];let start=0,depth=0,characters=0,lines=0,headings=[];

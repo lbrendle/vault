@@ -198,5 +198,110 @@ final class VaultCoreTests:XCTestCase {
   let renamed=try store.read("New/Renamed.md")
   XCTAssertThrowsError(try store.move("New/Renamed.md",to:"Index.md",revision:renamed["revision"] as! String))
  }
+ func testAttachmentsMoveAndTrashWithoutARevision() throws {
+  let bytes=Data((0..<4096).map{UInt8($0%251)})
+  try FileManager.default.createDirectory(at:root.appendingPathComponent("Papers"),withIntermediateDirectories:true)
+  try bytes.write(to:root.appendingPathComponent("Papers/Scan.pdf"))
+  try fixture("Index.md","![[Papers/Scan.pdf]] and [scan](Papers/Scan.pdf)")
+  _ = try store.scan()
+  XCTAssertNil(try store.read("Papers/Scan.pdf")["revision"])
+  XCTAssertEqual(try store.move("Papers/Scan.pdf",to:"Archive/Scan 2026.pdf",revision:"")["updatedLinksIn"] as? Int,1)
+  XCTAssertEqual(try Data(contentsOf:root.appendingPathComponent("Archive/Scan 2026.pdf")),bytes)
+  XCTAssertFalse(FileManager.default.fileExists(atPath:root.appendingPathComponent("Papers/Scan.pdf").path))
+  let index=try store.read("Index.md")["content"] as! String
+  XCTAssertTrue(index.contains("![[Archive/Scan 2026.pdf]]"));XCTAssertTrue(index.contains("(Archive/Scan%202026.pdf)"))
+  XCTAssertEqual(try store.backlinks("Archive/Scan 2026.pdf").count,1)
+  try store.trash("Archive/Scan 2026.pdf",revision:nil)
+  XCTAssertFalse(FileManager.default.fileExists(atPath:root.appendingPathComponent("Archive/Scan 2026.pdf").path))
+  XCTAssertEqual(store.status()["count"] as? Int,1)
+  // The trashed file is the recoverable copy; an attachment is never read to make a second one.
+  let kept=FileManager.default.enumerator(at:root.appendingPathComponent(".archii-vault/trash"),includingPropertiesForKeys:nil)?.compactMap{$0 as? URL}.filter{$0.lastPathComponent=="Scan 2026.pdf"} ?? []
+  XCTAssertEqual(try kept.map{try Data(contentsOf:$0)},[bytes]);XCTAssertTrue(try store.recovery("Archive/Scan 2026.pdf").isEmpty)
+ }
+ func testMoveKeepsTextAndAttachmentExtensionsApartAndTextRevisionsStrict() throws {
+  let revision=try store.save("Note.md",content:"hello",revision:nil)["revision"] as! String
+  _ = try store.save("Upper.MD",content:"hello",revision:nil)
+  try Data([1,2,3]).write(to:root.appendingPathComponent("Figure.png"))
+  XCTAssertThrowsError(try store.move("Note.md",to:"Note.pdf",revision:revision)){XCTAssertTrue($0.localizedDescription.contains("text"))}
+  XCTAssertThrowsError(try store.move("Figure.png",to:"Figure.md",revision:"")){XCTAssertTrue($0.localizedDescription.contains("text"))}
+  for (kept,absent) in [("Note.md","Note.pdf"),("Figure.png","Figure.md")] {
+   XCTAssertTrue(FileManager.default.fileExists(atPath:root.appendingPathComponent(kept).path));XCTAssertFalse(FileManager.default.fileExists(atPath:root.appendingPathComponent(absent).path))
+  }
+  // Text documents still need the revision that was read, whatever the case of their extension.
+  XCTAssertThrowsError(try store.move("Note.md",to:"Renamed.md",revision:""));XCTAssertThrowsError(try store.move("Upper.MD",to:"Lower.md",revision:""))
+  XCTAssertThrowsError(try store.trash("Note.md",revision:nil));XCTAssertThrowsError(try store.trash("Note.md",revision:"stale"));XCTAssertThrowsError(try store.trash("Upper.MD",revision:nil))
+  try store.trash("Note.md",revision:revision)
+  XCTAssertFalse(FileManager.default.fileExists(atPath:root.appendingPathComponent("Note.md").path));XCTAssertEqual(try store.recovery("Note.md").count,1)
+ }
+ func testChangedFoldersAreRecognisedForARescanButOtherFilesAreNot() throws {
+  try fixture("Research/Old/Deep/Note.md","a note");try fixture("Research/draft.tex","not a library document");try fixture("node_modules/pkg/readme.md","excluded")
+  try FileManager.default.createDirectory(at:root.appendingPathComponent("Research/Empty"),withIntermediateDirectories:true)
+  _ = try store.scan()
+  XCTAssertTrue(store.isFolder("Research/Old"));XCTAssertTrue(store.isFolder("Research/Empty"))
+  for path in ["Research/Old/Deep/Note.md","Research/draft.tex","Research/draft.aux","Research/Older","node_modules","node_modules/pkg",".git"] {XCTAssertFalse(store.isFolder(path),path)}
+  // Finder reports a renamed folder once for each name, with no event for the documents inside.
+  try FileManager.default.moveItem(at:root.appendingPathComponent("Research/Old"),to:root.appendingPathComponent("Research/New"))
+  try FileManager.default.removeItem(at:root.appendingPathComponent("Research/Empty"))
+  XCTAssertTrue(store.isFolder("Research/Old"),"Its documents are still indexed under the old name");XCTAssertTrue(store.isFolder("Research/New"));XCTAssertFalse(store.isFolder("Research/Empty"))
+  _ = try store.scan()
+  XCTAssertFalse(store.isFolder("Research/Old"))
+  XCTAssertEqual(try store.search("path:Research").compactMap{$0["path"] as? String},["Research/New/Deep/Note.md"])
+ }
+ func testSavingKeepsFinderTagsOtherAttributesAndCreationDate() throws {
+  let revision=try store.save("Tagged.md",content:"first",revision:nil)["revision"] as? String,url=root.appendingPathComponent("Tagged.md")
+  let tags=Data("<plist><array><string>Red</string></array></plist>".utf8),born=Date(timeIntervalSince1970:1_600_000_000)
+  setAttribute(url,"com.apple.metadata:_kMDItemUserTags",tags);setAttribute(url,"user.vault.comment",Data("mine".utf8))
+  try FileManager.default.setAttributes([.creationDate:born,.modificationDate:born],ofItemAtPath:url.path)
+  let saved=try store.save("Tagged.md",content:"second",revision:revision)
+  XCTAssertEqual(saved["content"] as? String,"second");XCTAssertEqual(try String(contentsOf:url,encoding:.utf8),"second")
+  XCTAssertEqual(attribute(url,"com.apple.metadata:_kMDItemUserTags"),tags);XCTAssertEqual(attribute(url,"user.vault.comment"),Data("mine".utf8))
+  let values=try FileManager.default.attributesOfItem(atPath:url.path)
+  XCTAssertEqual(values[.creationDate] as? Date,born);XCTAssertGreaterThan(try XCTUnwrap(values[.modificationDate] as? Date),born.addingTimeInterval(60))
+  XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:root.path).sorted(),[".archii-vault","Tagged.md"],"Nothing is left beside the note")
+  // A locked file refuses the metadata-keeping replacement; the save still goes through the way it always did.
+  try FileManager.default.setAttributes([.posixPermissions:0o400],ofItemAtPath:url.path)
+  XCTAssertEqual(try store.save("Tagged.md",content:"third",revision:saved["revision"] as? String)["content"] as? String,"third")
+  XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:root.path).sorted(),[".archii-vault","Tagged.md"])
+ }
+ func testRecoveryKeepsTheNewestHundredSnapshotsOfADocument() throws {
+  var revision=try store.save("Note.md",content:"v0",revision:nil)["revision"] as? String
+  revision=try store.save("Note.md",content:"v1",revision:revision)["revision"] as? String
+  let folder=root.appendingPathComponent(".archii-vault/recovery/"+VaultStore.fingerprint(Data("Note.md".utf8)))
+  func files() throws -> [String] {try FileManager.default.contentsOfDirectory(atPath:folder.path)}
+  // 120 versions kept by earlier sessions, oldest first, beside the one the save above wrote.
+  for i in 0..<120 {try Data("old \(i)".utf8).write(to:folder.appendingPathComponent("\(1_500_000_000_000+i)-\(UUID().uuidString).snapshot"))}
+  try Data("not a snapshot".utf8).write(to:folder.appendingPathComponent("notes.txt"))
+  revision=try store.save("Note.md",content:"v2",revision:revision)["revision"] as? String
+  XCTAssertEqual(try files().filter{$0.hasSuffix(".snapshot")}.count,100)
+  XCTAssertTrue(try files().contains("path.txt"));XCTAssertTrue(try files().contains("notes.txt"))
+  // The 22 oldest are gone; everything recovery() can list is still there to read.
+  XCTAssertFalse(try files().contains{$0.hasPrefix("\(1_500_000_000_000+21)-")});XCTAssertTrue(try files().contains{$0.hasPrefix("\(1_500_000_000_000+22)-")})
+  let listed=try store.recovery("Note.md");XCTAssertEqual(listed.count,100)
+  XCTAssertEqual(try store.recoveryRead("Note.md",id:listed[0]["id"] as! String),"v1");XCTAssertEqual(try store.recoveryRead("Note.md",id:listed[99]["id"] as! String),"old 22")
+  // A synced replacement archives the previous version into the same folder under the same bound.
+  let incoming=temp.appendingPathComponent("incoming.partial");try Data("from a peer".utf8).write(to:incoming)
+  try store.replaceFromSync(path:"Note.md",source:incoming)
+  XCTAssertEqual(try files().filter{$0.hasSuffix(".snapshot")}.count,100);XCTAssertFalse(try files().contains{$0.hasPrefix("\(1_500_000_000_000+22)-")})
+  XCTAssertEqual(try store.recoveryRead("Note.md",id:try store.recovery("Note.md")[0]["id"] as! String),"v2")
+  XCTAssertTrue(try files().contains("path.txt"));XCTAssertTrue(try files().contains("notes.txt"))
+ }
+ func testTextOverTheEditorLimitIsIndexedByNameWithoutBreakingScans() throws {
+  store.textLimit=1024
+  try fixture("Logs/Huge export.txt",String(repeating:"needle in a very large export ",count:100));try fixture("Gone.md","short lived");try fixture("Small.md","needle")
+  var result=try store.scan()
+  XCTAssertEqual(result["complete"] as? Bool,true);XCTAssertEqual((result["errors"] as? [String])?.count,0)
+  XCTAssertEqual(try store.search("path:Huge").first?["size"] as? Int,3000)
+  XCTAssertEqual(try store.search("needle").compactMap{$0["path"] as? String},["Small.md"],"Oversized text is found by name, not by content")
+  XCTAssertThrowsError(try store.read("Logs/Huge export.txt"))
+  XCTAssertEqual(try store.list(parent:"Logs").first?["path"] as? String,"Logs/Huge export.txt")
+  // A complete scan is what allows documents that are gone to be purged.
+  try FileManager.default.removeItem(at:root.appendingPathComponent("Gone.md"));result=try store.scan()
+  XCTAssertEqual(result["complete"] as? Bool,true);XCTAssertEqual(store.status()["count"] as? Int,2)
+ }
 
+}
+func setAttribute(_ url:URL,_ name:String,_ value:Data) {_ = value.withUnsafeBytes{setxattr(url.path,name,$0.baseAddress,value.count,0,0)}}
+func attribute(_ url:URL,_ name:String) -> Data? {
+ let size=getxattr(url.path,name,nil,0,0,0);guard size>=0 else {return nil}
+ var value=Data(count:size);_ = value.withUnsafeMutableBytes{getxattr(url.path,name,$0.baseAddress,size,0,0)};return value
 }

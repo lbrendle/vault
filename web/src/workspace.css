@@ -1,5 +1,5 @@
 /* Workspace composition. All device geometry and primary navigation live here. */
-:root { --rail:244px; --top:54px; --ease:cubic-bezier(.22,.8,.22,1); --duration:260ms; }
+:root { --rail:244px; --top:54px; --ease:cubic-bezier(.22,.8,.22,1); --duration:260ms; --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px); }
 [hidden] { display:none!important; }
 html,body,#root { width:100%; height:100%; margin:0; overflow:hidden; overscroll-behavior:none; }
 body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; -webkit-font-smoothing:antialiased; }
@@ -269,7 +269,25 @@ button { font-weight:450; }
 .brand > svg, .titlebar button > svg, .conversation-list-header > svg { display:block; flex-shrink:0; }
 [data-platform=mac] .workspace { padding-top:36px; }
 [data-platform=mac] .sidebar { padding-top:36px; }
-[data-platform=ios] .workspace { padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+/* Side safe areas. A folding iPhone keeps its status bar and system controls in a
+   column down one side, and a phone turned sideways has its sensor housing there,
+   so the two insets are often unequal. The pane at each edge absorbs its own inset
+   and the panes between them get none. */
+[data-platform=ios] .workspace { padding-left:var(--safe-left); padding-right:var(--safe-right); }
+[data-platform=ios] .app[data-sidebar=open] > .sidebar { margin-left:calc(8px + var(--safe-left)); }
+[data-platform=ios] .app[data-sidebar=open]:not([data-page=chat]) > .workspace { padding-left:0; }
+[data-platform=ios] .modal-scrim { padding-left:var(--safe-left); padding-right:var(--safe-right); }
+[data-platform=ios] .onboarding { padding-left:max(24px,var(--safe-left)); padding-right:max(24px,var(--safe-right)); }
+@media(max-width:650px) { [data-platform=ios] .app[data-sidebar=open] > .sidebar { margin-right:calc(8px + var(--safe-right)); } }
+
+/* A partly closed folding display bends down the middle of the window (fold.js).
+   Held upright like a book, the sidebar takes the whole left page and the workspace
+   starts on the right page; split preview puts source and preview on a page each.
+   No control then rests in the bend. Text that scrolls may cross it. */
+@media(min-width:651px) {
+ [data-fold=vertical] .app[data-sidebar=open] > .sidebar { --rail:calc(var(--fold-start) - 8px - var(--safe-left)); margin-right:var(--fold-size); }
+ [data-fold=vertical] .app[data-sidebar=closed] .document-space:not(:has(> .inspector)) .document-body.split > .editor { flex:0 0 calc(var(--fold-start) - var(--safe-left)); margin-right:var(--fold-size); }
+}
 
 [data-recoloring=true] *, [data-recoloring=true] *::before, [data-recoloring=true] *::after { transition:none!important; }
 
@@ -287,3 +305,12 @@ button { font-weight:450; }
 
 .folder-status { padding:14px 10px; color:var(--muted); font-size:12px; line-height:1.6; }
 .folder-status button { display:block; margin-top:8px; padding:6px 10px; border-radius:8px; background:var(--surface); color:var(--text); }
+
+/* Touch. Small close and dismiss controls keep their drawn size and gain a finger-sized hit area,
+   and actions that otherwise appear on hover stay visible where there is no hover. */
+@media(pointer:coarse) {
+ :is(.tab-close,.global-notice > button,.editing-banner button,.source-chip > button) { position:relative; }
+ :is(.tab-close,.global-notice > button,.editing-banner button,.source-chip > button)::after { content:''; position:absolute; inset:-12px; }
+}
+@media(hover:none) { .user-actions { opacity:.75; } }
+.modal:focus { outline:none; }

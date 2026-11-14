@@ -22,6 +22,15 @@ class LabFilesTest(unittest.TestCase):
     def call(self, method, **args):
         return kernel.dispatch({'method': method, 'root': str(self.root), 'args': {'project': '@/Curriculum/Starter Lab', **args}})
 
+    def test_missing_vault_folder_is_not_recreated(self):
+        moved = self.root.with_name(self.root.name + ' renamed')
+        self.root.rename(moved)
+        self.addCleanup(lambda: moved.rename(self.root))
+        for method, args in [('labProjects', {}), ('labRead', {'path': 'baseline.py'}), ('labSave', {'path': 'new.py', 'content': 'x = 1\n'})]:
+            with self.assertRaises(FileNotFoundError):
+                self.call(method, **args)
+        self.assertFalse(self.root.exists())
+
     def test_original_file_and_stale_save(self):
         opened = self.call('labRead', path='baseline.py')
         self.call('labSave', path='baseline.py', content="print('Café 🧠')\n", revision=opened['revision'])

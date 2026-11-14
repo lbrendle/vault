@@ -242,6 +242,9 @@ def dispatch_json(payload):
 
 def dispatch(request):
     args=request.get('args',{});method=request['method']
+    # The vault folder itself is never created here. After it is renamed, moved or disconnected,
+    # an empty folder at its old path would read as every document having been deleted.
+    if not pathlib.Path(request['root']).is_dir():raise FileNotFoundError('The vault folder is unavailable. It may have been moved, renamed or disconnected; reopen it to continue.')
     root=safe(request['root'],'Labs');root.mkdir(parents=True,exist_ok=True)
     os.environ['MPLBACKEND']='module://vault_backend'
     config=root/'.vaultlab'/'matplotlib';config.mkdir(parents=True,exist_ok=True);os.environ['MPLCONFIGDIR']=str(config)
